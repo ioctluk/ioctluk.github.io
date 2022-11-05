@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Build a new Linux Kernel under Debian &#183; root(at)host</title><meta name=description content="This page describes how to build your own Linux kernel under Debian . It is often useful to build your own kernel as sometimes the Debian default lacks something you need (for example, I need to enable RMI4 on my Thinkpad X1C6) or includes bloat you do not want (e.g., uncommon protocols such as RDS that might leave you exposed to an undisclosed or future vulnerability unecessarily.
+The official documentation for this is here provided by Debian here."><meta name=HandheldFriendly content="True"><meta name=MobileOptimized content="320"><meta name=generator content="Hugo 0.71.0-DEV"><meta name=robots content="index,follow"><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/styles/styles.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&subset=latin,cyrillic-ext,latin-ext,cyrillic"><link rel=stylesheet href=https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css integrity=sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN crossorigin=anonymous></head><body><div id=wrapper><header class=site-header><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class=button-square href=/index.xml><i class="fa fa-rss"></i></a></div><ul class=site-nav><li class=site-nav-item><a title=home href=/>home</a></li><li class=site-nav-item><a title=tags href=/tags/>tags</a></li></ul></div></header><div id=container><div class=container><article class=post-container><header class=post-header><h1 class=post-title>Build a new Linux Kernel under Debian</h1></header><div class="post-content clearfix"><p>This page describes how to build your own Linux kernel under <a href=https://www.debian.org/>Debian</a>
+.
+It is often useful to build your own kernel as sometimes the Debian default lacks something you need
+(for example, I need to enable RMI4 on my Thinkpad X1C6) or includes bloat you do not want (e.g.,
+uncommon protocols such as RDS that
+<a href=https://nvd.nist.gov/vuln/detail/CVE-2019-11815/>might leave you exposed to an undisclosed or future vulnerability unecessarily</a>.</p><p>The official documentation for this is here provided by
+<a href=https://kernel-team.pages.debian.net/kernel-handbook/ch-common-tasks.html#s-common-official>Debian here</a>.
+The below method is a very simple and reliable remix of the approaches list here that I find work very well.</p><p>Begin by installing packages for building:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ sudo apt install build-essential fakeroot
+$ sudo apt install libncurses5-dev  <span class=c1># for make nconfig</span>
+$ sudo apt install gcc-XXX-plugin-dev <span class=c1># for gcc plugins</span>
+$ sudo apt-get build-dep linux
+</code></pre></div><p>(replace XXX with the current gcc version)</p><p>Get Linux source, extract:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ mkdir -p build <span class=c1># make a build directory</span>
+$ <span class=nb>cd</span> build
+$ apt-get <span class=nb>source</span> linux
+$ <span class=nb>cd</span> linux-XXX
+</code></pre></div><p>I prefer to use apt to get the source: it will verify checksums for you automatically and include any handy patches from Debian.
+Replace XXX with the current Linux version.</p><p>Now the fun part: Configure the kernel to your liking.
+I find it helpful to base the new config of the current kernel config.
+You at least know the current kernel config boots with your current efi/initramfs/lvm/systemd/X combination.</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ cp /boot/config-<span class=k>$(</span>uname -r<span class=k>)</span> .config
+$ make nconfig
+</code></pre></div><p>If this fails, start from scratch: delete <code>.config</code> and start again.</p><p>Tips:</p><ul><li>See <a href=https://kernsec.org/wiki/index.php/Kernel_Self_Protection_Project/Recommended_Settings>this list of suggestions</a> for hardening your kernel configuration.</li><li>Be sure to set <code>Additional X.509 keys for default system keyring</code> to empty.</li><li>Thinkpad X1 6th Generation touchpad support requires Synaptics RMI4 support which can be found in
+Device Drivers -> Input device support -> Synaptics RMI4 bus support.</li><li>Don&rsquo;t forget to enable cipher modes for encrypted filesystems, e.g., XTS.</li><li>Also don&rsquo;t forget to enable DM crypt if you have an encrypted disk; it&rsquo;s under RAID/LVM.</li></ul><p>Build it!</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ <span class=nb>time</span> make -j8 bindeb-pkg
+</code></pre></div><p>Should take around 40 minutes on a recent machine. Go do something else.</p><p>&mldr;</p><p>Once the compilation has finished, several debian packages are produced in the parent directory.</p><h1 id=dkms>DKMS</h1><p>DKMS allows the automatic building of additional kernel modules once a kernel is compiled.
+Naturally then, if you force your modules to be signed, then it&rsquo;s nicer for new modules to automatically be signed by DKMS.
+To do this, edit <code>/etc/dkms/framework.conf</code> and add:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=nv>sign_tool</span><span class=o>=</span><span class=s2>&#34;/etc/dkms/sign_helper.sh&#34;</span>
+</code></pre></div><p>Then create <code>/etc/dkms/sign_helper.sh</code> with:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=cp>#!/bin/sh
+</span><span class=cp></span>/lib/modules/<span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span>/build/scripts/sign-file sha256 /root/signing_key.pem /root/signing_key.x509 <span class=s2>&#34;</span><span class=nv>$2</span><span class=s2>&#34;</span>
+</code></pre></div><p>and then copy <code>signing_key.{pem,x509}</code> from the build directory of the kernel under <code>certs</code>, to <code>/root</code>.</p><p>If you need to re-install something, look in <code>/usr/src</code>, and suppose you find a directory called <code>zfs-2.0.0</code>,
+then you can reinstall this and resign it with <code>dkms install zfs/2.0.0</code>.</p><h1 id=install>Install!</h1><p>Go install them:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ <span class=nb>cd</span> ..
+$ sudo dpkg -i linux-headers-4.19.28_4.19.28-1_amd64.deb linux-image-4.19.28_4.19.28-1_amd64.deb linux-libc-dev_4.19.28-1_amd64.deb
+</code></pre></div><p>Now reboot!</p><h2 id=potential-problems>Potential problems:</h2><ul><li><p><code>Cannot find missing AES-XTS-PLAIN64</code> at boot.
+Ensure <code>dm_crypt</code> is enabled in the kernel configuration.</p></li><li><p><code>kernel: request_module fs-efivarfs succeeded, but still no fs?</code> at boot.
+Ensure that <code>CONFIG_EFI_RUNTIME_MAP=y</code> is in <code>.config</code></p></li><li><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ modprobe foo
+foo: Key was rejected by service<span class=sb>`</span>
+</code></pre></div><p>The steps above enforced modules to be signed. It&rsquo;s easy to sign if you&rsquo;ve got the key from the build:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ sudo ./scripts/sign-file sha256 ./certs/signing_key.pem ./certs/signing_key.x509 /lib/modules/5.2.9/updates/dkms/foo.ko
+</code></pre></div><p>See above how to solve this long term.</p></li><li><p>No network access when using <code>ufw</code>. Try <code>ufw disable</code>. If this fixes things, then
+try <code>ufw enable</code> and see if you get errors like:</p><div class=highlight><pre class=chroma><code class=language-fallback data-lang=fallback>ERROR: problem running ufw-init
+</code></pre></div></li></ul><p>iptables-restore v1.8.7 (nf_tables):
+line 42: RULE_APPEND failed (No such file or directory): rule in chain INPUT
+&mldr;
+line 35: RULE_APPEND failed (No such file or directory): rule in chain ufw6-user-limit-accept
+ip6tables-restore: line 5 failed</p><p>Problem running &lsquo;/etc/ufw/before.rules&rsquo;
+Problem running &lsquo;/etc/ufw/after.rules&rsquo;
+Problem running &lsquo;/etc/ufw/user.rules&rsquo;
+Problem running &lsquo;/etc/ufw/before6.rules&rsquo;
+Problem running &lsquo;/etc/ufw/after6.rules&rsquo;
+Problem running &lsquo;/etc/ufw/user6.rules&rsquo;
+<code>The fix is very simple, and I do not understand why it's needed but, eh:</code>shell
+$ sudo update-alternatives &ndash;set ip6tables /usr/sbin/ip6tables-legacy
+$ sudo update-alternatives &ndash;set iptables /usr/sbin/iptables-legacy
+$ sudo ufw enable
+```
+Linux firewalling is a real mess.</p></div><footer class="post-footer clearfix"><p class=post-tags><span>Tagged:</span>
+<a href=/tags/linux/>linux</a>,
+<a href=/tags/debian/>debian</a></p></footer></article></div></div></div><footer class=footer><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class="button-square button-jump-top js-jump-top" href=#><i class="fa fa-angle-up"></i></a></div><p class=footer-copyright><span>&copy; 2018-2022 root(at)host</span></p></div></footer><script src=/js/jquery-1.11.3.min.js></script><script src=/js/jquery.fitvids.js></script><script src=/js/scripts.js></script></body><script data-goatcounter=https://ioctl_uk.goatcounter.com/count async src=//gc.zgo.at/count.js></script></html>

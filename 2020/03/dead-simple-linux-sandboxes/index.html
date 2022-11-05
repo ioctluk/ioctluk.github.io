@@ -1,0 +1,184 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Dead Simple Linux Sandboxes &#183; root(at)host</title><meta name=description content="bubblewrap is a wonderful tool for creating sandboxes as an unprivileged user. Here&rsquo;s some useful sandboxes that I regularly use.
+Reading Mail in Isolation #!/bin/sh  exec bwrap --unshare-user --unshare-ipc --unshare-pid --unshare-uts --unshare-cgroup \  --ro-bind /bin /bin \  --ro-bind /lib /lib \  --ro-bind /lib64 /lib64 \  --ro-bind /usr/bin /usr/bin \  --ro-bind /usr/lib /usr/lib \  --ro-bind /usr/share/terminfo /usr/share/terminfo \  --ro-bind /etc/passwd /etc/passwd \  --ro-bind $HOME/."><meta name=HandheldFriendly content="True"><meta name=MobileOptimized content="320"><meta name=generator content="Hugo 0.71.0-DEV"><meta name=robots content="index,follow"><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/styles/styles.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&subset=latin,cyrillic-ext,latin-ext,cyrillic"><link rel=stylesheet href=https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css integrity=sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN crossorigin=anonymous></head><body><div id=wrapper><header class=site-header><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class=button-square href=/index.xml><i class="fa fa-rss"></i></a></div><ul class=site-nav><li class=site-nav-item><a title=home href=/>home</a></li><li class=site-nav-item><a title=tags href=/tags/>tags</a></li></ul></div></header><div id=container><div class=container><article class=post-container><header class=post-header><h1 class=post-title>Dead Simple Linux Sandboxes</h1></header><div class="post-content clearfix"><p><a href=https://github.com/containers/bubblewrap>bubblewrap</a> is a wonderful tool for creating sandboxes as an unprivileged user. Here&rsquo;s some useful sandboxes that I regularly use.</p><h1 id=reading-mail-in-isolation>Reading Mail in Isolation</h1><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=cp>#!/bin/sh
+</span><span class=cp></span>
+<span class=nb>exec</span> bwrap --unshare-user --unshare-ipc --unshare-pid --unshare-uts --unshare-cgroup <span class=se>\
+</span><span class=se></span>    --ro-bind /bin /bin <span class=se>\
+</span><span class=se></span>    --ro-bind /lib /lib <span class=se>\
+</span><span class=se></span>    --ro-bind /lib64 /lib64 <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/bin /usr/bin <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/lib /usr/lib <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/share/terminfo /usr/share/terminfo <span class=se>\
+</span><span class=se></span>    --ro-bind /etc/passwd /etc/passwd <span class=se>\
+</span><span class=se></span>    --ro-bind <span class=nv>$HOME</span>/.muttrc <span class=nv>$HOME</span>/.muttrc <span class=se>\
+</span><span class=se></span>    --bind <span class=nv>$HOME</span>/.mutt_certificates <span class=nv>$HOME</span>/.mutt_certificates <span class=se>\
+</span><span class=se></span>    --bind <span class=nv>$MAIL</span> <span class=nv>$MAIL</span> <span class=se>\
+</span><span class=se></span>    --tmpfs /tmp <span class=se>\
+</span><span class=se></span>    mutt <span class=s2>&#34;</span><span class=nv>$@</span><span class=s2>&#34;</span>
+</code></pre></div><h1 id=text-mode-web-browsing-without-distractions>Text-mode Web Browsing without Distractions</h1><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=cp>#!/bin/bash
+</span><span class=cp></span>
+<span class=nb>exec</span> bwrap --unshare-user --unshare-ipc --unshare-pid --unshare-uts --unshare-cgroup <span class=se>\
+</span><span class=se></span>    --ro-bind /bin /bin <span class=se>\
+</span><span class=se></span>    --ro-bind /lib /lib <span class=se>\
+</span><span class=se></span>    --ro-bind /lib64 /lib64 <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/bin /usr/bin <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/lib /usr/lib <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/share/terminfo /usr/share/terminfo <span class=se>\
+</span><span class=se></span>    --ro-bind /etc/passwd /etc/passwd <span class=se>\
+</span><span class=se></span>    --ro-bind /etc/lynx /etc/lynx <span class=se>\
+</span><span class=se></span>    --ro-bind /etc/ssl/certs /etc/ssl/certs <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/share/ca-certificates /usr/share/ca-certificates <span class=se>\
+</span><span class=se></span>    --bind <span class=nv>$HOME</span>/Downloads <span class=nv>$HOME</span>/Downloads <span class=se>\
+</span><span class=se></span>    --tmpfs /tmp <span class=se>\
+</span><span class=se></span>    lynx <span class=s2>&#34;</span><span class=nv>$@</span><span class=s2>&#34;</span>
+</code></pre></div><h1 id=just-reading-a-pdf>Just Reading a PDF</h1><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=cp>#!/bin/sh
+</span><span class=cp></span>
+<span class=k>for</span> last<span class=p>;</span> <span class=k>do</span> true<span class=p>;</span> <span class=k>done</span>
+
+<span class=nb>exec</span> bwrap --unshare-all <span class=se>\
+</span><span class=se></span>    --ro-bind /lib /lib <span class=se>\
+</span><span class=se></span>    --ro-bind /bin /bin <span class=se>\
+</span><span class=se></span>    --ro-bind /lib64 /lib64 <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/bin /usr/bin <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/lib /usr/lib <span class=se>\
+</span><span class=se></span>    --ro-bind <span class=s2>&#34;</span><span class=nv>$last</span><span class=s2>&#34;</span> <span class=s2>&#34;</span><span class=nv>$last</span><span class=s2>&#34;</span> <span class=se>\
+</span><span class=se></span>    --bind /tmp /tmp <span class=se>\
+</span><span class=se></span>    --dev /dev <span class=se>\
+</span><span class=se></span>    --proc /proc  <span class=se>\
+</span><span class=se></span>    --chdir / <span class=se>\
+</span><span class=se></span>    /usr/bin/mupdf <span class=s2>&#34;</span><span class=nv>$@</span><span class=s2>&#34;</span>
+</code></pre></div><h1 id=sandboxing-ssh-clients>Sandboxing ssh Clients</h1><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=cp>#!/bin/bash
+</span><span class=cp></span>
+<span class=nv>ssh</span><span class=o>=</span>/usr/bin/ssh
+<span class=nv>ssh_auth_dir</span><span class=o>=</span><span class=k>$(</span>dirname <span class=nv>$SSH_AUTH_SOCK</span><span class=k>)</span>
+<span class=nb>exec</span> bwrap --unshare-user --unshare-ipc --unshare-pid --unshare-uts --unshare-cgroup <span class=se>\
+</span><span class=se></span>    --ro-bind /lib /lib <span class=se>\
+</span><span class=se></span>    --ro-bind /lib64 /lib64 <span class=se>\
+</span><span class=se></span>    --ro-bind /usr/lib /usr/lib <span class=se>\
+</span><span class=se></span>    --bind <span class=nv>$HOME</span>/.ssh/ <span class=nv>$HOME</span>/.ssh/ <span class=se>\
+</span><span class=se></span>    --ro-bind /etc/passwd /etc/passwd <span class=se>\
+</span><span class=se></span>    --ro-bind /bin/bash /bin/bash <span class=se>\
+</span><span class=se></span>    --bind <span class=nv>$ssh_auth_dir</span> <span class=nv>$ssh_auth_dir</span> <span class=se>\
+</span><span class=se></span>    --bind <span class=nv>$ssh</span> <span class=nv>$ssh</span> <span class=se>\
+</span><span class=se></span>    --dev /dev <span class=se>\
+</span><span class=se></span>    <span class=nv>$ssh</span> <span class=s2>&#34;</span><span class=nv>$@</span><span class=s2>&#34;</span>
+</code></pre></div><h1 id=the-private-crypto-vault>The Private Crypto Vault</h1><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=cp>#!/bin/bash
+</span><span class=cp></span><span class=nv>NAME</span><span class=o>=</span>vault
+<span class=k>function</span> cleanup <span class=o>{</span>
+    <span class=nb>echo</span> closing the <span class=nv>$NAME</span>..
+    sudo /sbin/cryptsetup close <span class=nv>$NAME</span>
+<span class=o>}</span>
+
+<span class=nb>trap</span> cleanup EXIT
+
+sudo /sbin/cryptsetup open /root/<span class=nv>$NAME</span>.fs <span class=nv>$NAME</span> <span class=o>&amp;&amp;</span> <span class=se>\
+</span><span class=se></span>sudo fsck /dev/mapper/<span class=nv>$NAME</span> <span class=o>&amp;&amp;</span> <span class=se>\
+</span><span class=se></span>sudo unshare --mount --ipc --net sudo /bin/sh -c <span class=s2>&#34;mount </span><span class=nv>$HOME</span><span class=s2>/mnt &amp;&amp; sudo -u </span><span class=nv>$USER</span><span class=s2> </span><span class=nv>$SHELL</span><span class=s2>&#34;</span>
+</code></pre></div><h1 id=the-development-idyll>The Development Idyll</h1><p>Name the script dev, then usage:</p><pre><code>$ dev go
+$ go get evilscript # this will fail, no network
+</code></pre><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=cp>#!/bin/bash
+</span><span class=cp></span>
+<span class=nv>CMD</span><span class=o>=</span><span class=nv>$SHELL</span>
+<span class=nv>NET</span><span class=o>=</span><span class=s2>&#34;--unshare-net --ro-bind /etc/resolv.conf /etc/resolv.conf&#34;</span>
+<span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;&#34;</span>
+<span class=nv>CONFIGS</span><span class=o>=</span><span class=s2>&#34;.bashrc .tmux.conf .vimrc .vim .ipython .jupyter .gitconfig&#34;</span>
+<span class=nv>HOST</span><span class=o>=</span>dev
+
+<span class=k>for</span> opt in <span class=s2>&#34;</span><span class=nv>$@</span><span class=s2>&#34;</span><span class=p>;</span> <span class=k>do</span>
+    <span class=k>case</span> <span class=nv>$opt</span> in
+        net<span class=o>)</span>
+            <span class=nv>NET</span><span class=o>=</span><span class=s2>&#34;&#34;</span>
+            <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind /etc/ssl/certs /etc/ssl/certs&#34;</span>
+            <span class=nv>HOST</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$HOST</span><span class=s2>-net&#34;</span>
+            <span class=p>;;</span>
+        ssh*<span class=o>)</span>
+            <span class=nv>NET</span><span class=o>=</span><span class=s2>&#34;&#34;</span>
+            <span class=nv>key</span><span class=o>=</span><span class=k>$(</span><span class=nb>echo</span> <span class=nv>$opt</span> <span class=p>|</span> sed -e <span class=s1>&#39;s/ssh.//&#39;</span><span class=k>)</span>
+            <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$SSH_AUTH_SOCK</span><span class=s2> </span><span class=nv>$SSH_AUTH_SOCK</span><span class=s2>&#34;</span>
+            <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$HOME</span><span class=s2>/.ssh/config </span><span class=nv>$HOME</span><span class=s2>/.ssh/config&#34;</span>
+            <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$HOME</span><span class=s2>/.ssh/known_hosts </span><span class=nv>$HOME</span><span class=s2>/.ssh/known_hosts&#34;</span>
+            <span class=k>if</span> <span class=o>[</span> -n <span class=s2>&#34;</span><span class=nv>$key</span><span class=s2>&#34;</span> <span class=o>]</span><span class=p>;</span> <span class=k>then</span>
+                <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$HOME</span><span class=s2>/.ssh/id_</span><span class=nv>$key</span><span class=s2> </span><span class=nv>$HOME</span><span class=s2>/.ssh/id_</span><span class=nv>$key</span><span class=s2>&#34;</span>
+                <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$HOME</span><span class=s2>/.ssh/id_</span><span class=nv>$key</span><span class=s2>.pub </span><span class=nv>$HOME</span><span class=s2>/.ssh/id_</span><span class=nv>$key</span><span class=s2>.pub&#34;</span>
+                <span class=nv>HOST</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$HOST</span><span class=s2>-ssh2</span><span class=nv>$key</span><span class=s2>&#34;</span>
+            <span class=k>else</span>
+                <span class=nv>HOST</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$HOST</span><span class=s2>-ssh&#34;</span>
+            <span class=k>fi</span>
+            <span class=p>;;</span>
+        web<span class=o>)</span>
+            <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$HOME</span><span class=s2>/web </span><span class=nv>$HOME</span><span class=s2>/web&#34;</span>
+            <span class=nv>CONFIGS</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$CONFIGS</span><span class=s2> .linkchecker&#34;</span>
+            <span class=nv>HOST</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$HOST</span><span class=s2>-web&#34;</span>
+            <span class=p>;;</span>
+        src<span class=o>)</span>
+            <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$HOME</span><span class=s2>/src </span><span class=nv>$HOME</span><span class=s2>/src&#34;</span>
+            <span class=nv>HOST</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$HOST</span><span class=s2>-src&#34;</span>
+            <span class=p>;;</span>
+        cwd<span class=o>)</span>
+            <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$PWD</span><span class=s2> </span><span class=nv>$PWD</span><span class=s2>&#34;</span>
+            <span class=p>;;</span>
+        py<span class=o>)</span>
+            <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$HOME</span><span class=s2>/.local </span><span class=nv>$HOME</span><span class=s2>/.local&#34;</span>
+            <span class=nv>HOST</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$HOST</span><span class=s2>-py&#34;</span>
+            <span class=p>;;</span>
+        go<span class=o>)</span>
+            <span class=nv>EXTRA</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$EXTRA</span><span class=s2> --bind </span><span class=nv>$GOPATH</span><span class=s2> </span><span class=nv>$GOPATH</span><span class=s2>&#34;</span>
+            <span class=nv>HOST</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$HOST</span><span class=s2>-go&#34;</span>
+            <span class=p>;;</span>
+        *<span class=o>)</span>
+            cat <span class=s>&lt;&lt;EOF 2&gt;&amp;1
+</span><span class=s>usage: $0 mode1 mode2 ... modeN
+</span><span class=s>
+</span><span class=s> mode is one of:
+</span><span class=s> * net
+</span><span class=s>    enable network + share public ssl certs
+</span><span class=s>
+</span><span class=s> * web
+</span><span class=s>    share web directory
+</span><span class=s>
+</span><span class=s> * src
+</span><span class=s>    share src directory
+</span><span class=s>
+</span><span class=s> * cwd
+</span><span class=s>    share current working directory
+</span><span class=s>
+</span><span class=s> * py
+</span><span class=s>    share python stuff
+</span><span class=s>
+</span><span class=s> * ssh=keyname
+</span><span class=s>    where keyname exists as .ssh/id_keyname*
+</span><span class=s>    implies enabling network
+</span><span class=s>EOF</span>
+            <span class=nb>exit</span> <span class=m>1</span>
+            <span class=p>;;</span>
+    <span class=k>esac</span>
+<span class=k>done</span>
+
+<span class=k>for</span> config in <span class=nv>$CONFIGS</span><span class=p>;</span> <span class=k>do</span>
+    <span class=nv>CONFIG</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$CONFIG</span><span class=s2> --ro-bind </span><span class=nv>$HOME</span><span class=s2>/</span><span class=nv>$config</span><span class=s2> </span><span class=nv>$HOME</span><span class=s2>/</span><span class=nv>$config</span><span class=s2>&#34;</span>
+<span class=k>done</span>
+
+<span class=nb>exec</span> bwrap <span class=se>\
+</span><span class=se></span>    --unshare-user <span class=se>\
+</span><span class=se></span>    --unshare-ipc <span class=se>\
+</span><span class=se></span>    --unshare-pid <span class=se>\
+</span><span class=se></span>    <span class=nv>$NET</span> <span class=se>\
+</span><span class=se></span>    --unshare-uts <span class=se>\
+</span><span class=se></span>    --unshare-cgroup <span class=se>\
+</span><span class=se></span>    --hostname <span class=nv>$HOST</span>.home <span class=se>\
+</span><span class=se></span>    --proc /proc <span class=se>\
+</span><span class=se></span>    --dev /dev <span class=se>\
+</span><span class=se></span>    --tmpfs /tmp <span class=se>\
+</span><span class=se></span>    --ro-bind /bin /bin <span class=se>\
+</span><span class=se></span>    --ro-bind /usr /usr <span class=se>\
+</span><span class=se></span>    --ro-bind /lib /lib <span class=se>\
+</span><span class=se></span>    --ro-bind /lib64 /lib64 <span class=se>\
+</span><span class=se></span>    --ro-bind /sbin /sbin <span class=se>\
+</span><span class=se></span>    --ro-bind /etc/passwd /etc/passwd <span class=se>\
+</span><span class=se></span>    --ro-bind /etc/group /etc/group <span class=se>\
+</span><span class=se></span>    --ro-bind /etc/alternatives /etc/alternatives <span class=se>\
+</span><span class=se></span>    <span class=nv>$CONFIG</span> <span class=se>\
+</span><span class=se></span>    <span class=nv>$EXTRA</span> <span class=se>\
+</span><span class=se></span>    <span class=nv>$CMD</span>
+</code></pre></div></div><footer class="post-footer clearfix"><p class=post-tags><span>Tagged:</span>
+<a href=/tags/security/>security</a>,
+<a href=/tags/linux/>linux</a></p></footer></article></div></div></div><footer class=footer><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class="button-square button-jump-top js-jump-top" href=#><i class="fa fa-angle-up"></i></a></div><p class=footer-copyright><span>&copy; 2018-2022 root(at)host</span></p></div></footer><script src=/js/jquery-1.11.3.min.js></script><script src=/js/jquery.fitvids.js></script><script src=/js/scripts.js></script></body><script data-goatcounter=https://ioctl_uk.goatcounter.com/count async src=//gc.zgo.at/count.js></script></html>

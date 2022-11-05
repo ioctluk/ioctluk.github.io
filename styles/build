@@ -1,0 +1,1 @@
+sassc index.scss  >styles.css

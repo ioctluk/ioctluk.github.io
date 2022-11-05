@@ -1,0 +1,79 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Sandboxing irssi &#183; root(at)host</title><meta name=description content="irssiis an IRC client. Unlike most daemons, irssi runs as a normal user and so the privileges of irssi are just those of the invoking user. By sandboxing irssi, it is restricted beyond those privileges of the invoking user. For example, irssi is able to read /etc/passwd and also run other programs.
+This page describes how to sandbox irssi under OpenBSD using its builtin sandboxing mechanisms pledge(2) and unveil(2) . Each restricts the capabilities of a process in different ways."><meta name=HandheldFriendly content="True"><meta name=MobileOptimized content="320"><meta name=generator content="Hugo 0.71.0-DEV"><meta name=robots content="index,follow"><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/styles/styles.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&subset=latin,cyrillic-ext,latin-ext,cyrillic"><link rel=stylesheet href=https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css integrity=sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN crossorigin=anonymous></head><body><div id=wrapper><header class=site-header><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class=button-square href=/index.xml><i class="fa fa-rss"></i></a></div><ul class=site-nav><li class=site-nav-item><a title=home href=/>home</a></li><li class=site-nav-item><a title=tags href=/tags/>tags</a></li></ul></div></header><div id=container><div class=container><article class=post-container><header class=post-header><h1 class=post-title>Sandboxing irssi</h1></header><div class="post-content clearfix"><p>irssi is an IRC client.
+Unlike most daemons, <code>irssi</code> runs as a normal user and so the privileges of <code>irssi</code> are just those of the invoking user.
+By sandboxing <code>irssi</code>, it is restricted beyond those privileges of the invoking user.
+For example, <code>irssi</code> is able to read <code>/etc/passwd</code> and also run other programs.</p><p>This page describes how to sandbox <code>irssi</code> under <a href=https://www.OpenBSD.org/>OpenBSD</a>
+using its builtin sandboxing mechanisms <a href=https://man.openbsd.org/pledge.2>pledge(2)</a>
+and <a href=https://man.openbsd.org/unveil.2>unveil(2)</a>
+.
+Each restricts the capabilities of a process in different ways.
+<a href=https://man.openbsd.org/pledge.2>pledge(2)</a>
+limits the system calls that a process may use (e.g., whether another program can be run or not).
+<a href=https://man.openbsd.org/unveil.2>unveil(2)</a>
+restricts the filesystem access of a process (e.g., whether <code>/etc/passwd</code> can be read or not).</p><p>The sandbox is another program that as it&rsquo;s last action invokes <code>irssi</code>, having revoked many of the user&rsquo;s privileges.
+The sandbox is written in C.</p><p>First include system headers and define the main function of the sandbox:</p><div class=highlight><pre class=chroma><code class=language-c data-lang=c><span class=cp>#include</span> <span class=cpf>&lt;unistd.h&gt;</span><span class=cp>
+</span><span class=cp>#include</span> <span class=cpf>&lt;err.h&gt;</span><span class=cp>
+</span><span class=cp></span>
+<span class=kt>int</span> <span class=nf>main</span><span class=p>(</span><span class=kt>int</span> <span class=n>argc</span><span class=p>,</span> <span class=kt>char</span> <span class=o>**</span><span class=n>argv</span><span class=p>,</span> <span class=kt>char</span> <span class=o>**</span><span class=n>envp</span><span class=p>)</span> <span class=p>{</span>
+</code></pre></div><p>Next define the path to the <code>irssi</code> binary:</p><div class=highlight><pre class=chroma><code class=language-c data-lang=c>        <span class=k>const</span> <span class=kt>char</span> <span class=o>*</span><span class=n>prog</span> <span class=o>=</span> <span class=s>&#34;/usr/local/bin/irssi&#34;</span><span class=p>;</span>
+</code></pre></div><p>Now define a list the files that <code>irssi</code> can read and write.
+Note that in the following you should take care to replace <code>/home/USER</code> with the home directory of the user
+that will run <code>irssi</code>: ideally the sandbox would work all this out by itself but I have not done so for simplicity.</p><div class=highlight><pre class=chroma><code class=language-c data-lang=c>        <span class=k>const</span> <span class=kt>char</span> <span class=o>*</span><span class=n>rw_files</span><span class=p>[]</span> <span class=o>=</span> <span class=p>{</span>
+                <span class=s>&#34;/dev/null&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/home/USER/.irssi&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/home/USER/.terminfo&#34;</span><span class=p>,</span>
+        <span class=p>};</span>
+</code></pre></div><p>List the files that <code>irssi</code> that <code>irssi</code> can read from (but not write):</p><div class=highlight><pre class=chroma><code class=language-c data-lang=c>        <span class=k>const</span> <span class=kt>char</span> <span class=o>*</span><span class=n>ro_files</span><span class=p>[]</span> <span class=o>=</span> <span class=p>{</span>
+                <span class=s>&#34;/etc/localtime&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/etc/malloc.conf&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/etc/resolv.conf&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/etc/ssl/cert.pem&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/usr/lib&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/usr/libdata/perl5&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/usr/libexec/ld.so&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/usr/local/lib&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/usr/local/libdata/perl5&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/usr/local/share/irssi/help&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/usr/share/terminfo&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/usr/share/zoneinfo&#34;</span><span class=p>,</span>
+                <span class=s>&#34;/var/run/ld.so.hints&#34;</span><span class=p>,</span>
+        <span class=p>};</span>
+</code></pre></div><p>The first argument to <a href=https://man.openbsd.org/unveil.2>unveil(2)</a>
+is the path to restrict and the second
+argument specifies the kind of access: {r}ead, {w}rite, {c}reate and/or
+e{x}ecute access, so a string &ldquo;r&rdquo; means read-only access and &ldquo;rwc&rdquo; requests
+read, write and create access.
+The sandbox iterates over all of the readable and writable files and
+uses <a href=https://man.openbsd.org/unveil.2>unveil(2)</a>
+to declare</p><div class=highlight><pre class=chroma><code class=language-c data-lang=c>        <span class=k>for</span> <span class=p>(</span><span class=kt>int</span> <span class=n>i</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span> <span class=n>i</span> <span class=o>&lt;</span> <span class=k>sizeof</span><span class=p>(</span><span class=n>rw_files</span><span class=p>)</span><span class=o>/</span><span class=k>sizeof</span><span class=p>(</span><span class=n>rw_files</span><span class=p>[</span><span class=mi>0</span><span class=p>]);</span> <span class=n>i</span><span class=o>++</span><span class=p>)</span> <span class=p>{</span>
+                <span class=k>if</span> <span class=p>(</span><span class=n>unveil</span><span class=p>(</span><span class=n>rw_files</span><span class=p>[</span><span class=n>i</span><span class=p>],</span> <span class=s>&#34;rwc&#34;</span><span class=p>)</span> <span class=o>==</span> <span class=o>-</span><span class=mi>1</span><span class=p>)</span> <span class=p>{</span>
+                        <span class=n>err</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=s>&#34;unveil&#34;</span><span class=p>);</span>
+                <span class=p>}</span>
+        <span class=p>}</span>
+</code></pre></div><p>Then the sandbox iterates over all of the read-only files and invokes
+<a href=https://man.openbsd.org/unveil.2>unveil(2)</a>
+appropriately</p><div class=highlight><pre class=chroma><code class=language-c data-lang=c>        <span class=k>for</span> <span class=p>(</span><span class=kt>int</span> <span class=n>i</span> <span class=o>=</span> <span class=mi>0</span><span class=p>;</span> <span class=n>i</span> <span class=o>&lt;</span> <span class=k>sizeof</span><span class=p>(</span><span class=n>ro_files</span><span class=p>)</span><span class=o>/</span><span class=k>sizeof</span><span class=p>(</span><span class=n>ro_files</span><span class=p>[</span><span class=mi>0</span><span class=p>]);</span> <span class=n>i</span><span class=o>++</span><span class=p>)</span> <span class=p>{</span>
+                <span class=k>if</span> <span class=p>(</span><span class=n>unveil</span><span class=p>(</span><span class=n>ro_files</span><span class=p>[</span><span class=n>i</span><span class=p>],</span> <span class=s>&#34;r&#34;</span><span class=p>)</span> <span class=o>==</span> <span class=o>-</span><span class=mi>1</span><span class=p>)</span> <span class=p>{</span>
+                        <span class=n>err</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=s>&#34;unveil&#34;</span><span class=p>);</span>
+                <span class=p>}</span>
+        <span class=p>}</span>
+</code></pre></div><p>Finally the sandbox must give itself execute access to the <code>irssi</code> binary</p><div class=highlight><pre class=chroma><code class=language-c data-lang=c>        <span class=k>if</span> <span class=p>(</span><span class=n>unveil</span><span class=p>(</span><span class=n>prog</span><span class=p>,</span> <span class=s>&#34;x&#34;</span><span class=p>)</span> <span class=o>==</span> <span class=o>-</span><span class=mi>1</span><span class=p>)</span> <span class=p>{</span>
+                <span class=n>err</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=s>&#34;unveil&#34;</span><span class=p>);</span>
+        <span class=p>}</span>
+</code></pre></div><p>The next step is to call <a href=https://man.openbsd.org/pledge.2>pledge(2)</a>
+, which does many things:</p><ol><li>it revokes all privileges for the sandbox process except for &ldquo;exec&rdquo;</li><li>&mldr; including revoking the ability to call <a href=https://man.openbsd.org/unveil.2>unveil(2)</a>
+.</li><li>it sets the privileges of the process after the next <a href=https://man.openbsd.org/exec.3>exec(3)</a>
+: see
+<a href=https://man.openbsd.org/pledge.2>pledge(2)</a>
+for a full description of the privileges.</li></ol><p>This is all done by the following</p><div class=highlight><pre class=chroma><code class=language-c data-lang=c>        <span class=k>if</span> <span class=p>(</span><span class=n>pledge</span><span class=p>(</span><span class=s>&#34;exec&#34;</span><span class=p>,</span> <span class=s>&#34;stdio cpath rpath wpath inet dns tty proc getpw&#34;</span><span class=p>)</span> <span class=o>==</span> <span class=o>-</span><span class=mi>1</span><span class=p>)</span> <span class=p>{</span>
+                <span class=n>err</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=s>&#34;pledge&#34;</span><span class=p>);</span>
+        <span class=p>}</span>
+</code></pre></div><p>Finally, runs <code>irssi</code>.</p><div class=highlight><pre class=chroma><code class=language-c data-lang=c>        <span class=n>execve</span><span class=p>(</span><span class=n>prog</span><span class=p>,</span> <span class=n>argv</span><span class=p>,</span> <span class=n>envp</span><span class=p>);</span>
+        <span class=n>err</span><span class=p>(</span><span class=mi>1</span><span class=p>,</span> <span class=s>&#34;execve&#34;</span><span class=p>);</span>
+<span class=p>}</span>
+</code></pre></div><p>Placing all of the above code in <code>src/irssi.c</code>, it may be compiled as follows:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ cc -D_FORTIFY_SOURCE<span class=o>=</span><span class=m>2</span> -O2 -Wl,-z,now -Wl,-z,relno -o bin/irssi src/irssi.c
+</code></pre></div><p>Then if <code>bin</code> is in your <code>PATH</code> before <code>/usr/local/bin</code> then when you type <code>irssi</code>
+at the shell, you should invoke the sandboxed <code>irssi</code>.
+To test, type <code>/exec cat /etc/passwd</code> inside <code>irssi</code>: the process should be killed.</p></div><footer class="post-footer clearfix"><p class=post-tags><span>Tagged:</span>
+<a href=/tags/openbsd/>openbsd</a>,
+<a href=/tags/security/>security</a></p></footer></article></div></div></div><footer class=footer><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class="button-square button-jump-top js-jump-top" href=#><i class="fa fa-angle-up"></i></a></div><p class=footer-copyright><span>&copy; 2018-2022 root(at)host</span></p></div></footer><script src=/js/jquery-1.11.3.min.js></script><script src=/js/jquery.fitvids.js></script><script src=/js/scripts.js></script></body><script data-goatcounter=https://ioctl_uk.goatcounter.com/count async src=//gc.zgo.at/count.js></script></html>

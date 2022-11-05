@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>SQL for CSV files &#183; root(at)host</title><meta name=description content="sqlite can be used to provide an SQL interface to CSV files. sqlite provides several ways to interact with CSV files. CSV virtual tables is a separate loadable library that provides efficient read-only access to CSV files. At the time of writing, however, the library is compiled separately from sqlite itself, making it a little cumbersome to use. Fortunately, sqlite has a very straightforward built-in way to interact with CSV files: ."><meta name=HandheldFriendly content="True"><meta name=MobileOptimized content="320"><meta name=generator content="Hugo 0.71.0-DEV"><meta name=robots content="index,follow"><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/styles/styles.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&subset=latin,cyrillic-ext,latin-ext,cyrillic"><link rel=stylesheet href=https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css integrity=sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN crossorigin=anonymous></head><body><div id=wrapper><header class=site-header><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class=button-square href=/index.xml><i class="fa fa-rss"></i></a></div><ul class=site-nav><li class=site-nav-item><a title=home href=/>home</a></li><li class=site-nav-item><a title=tags href=/tags/>tags</a></li></ul></div></header><div id=container><div class=container><article class=post-container><header class=post-header><h1 class=post-title>SQL for CSV files</h1></header><div class="post-content clearfix"><p><a href=https://www.sqlite.org/>sqlite</a> can be used to provide an SQL interface to <a href=https://en.wikipedia.org/wiki/Comma-Separated_values>CSV</a> files.
+<code>sqlite</code> provides several ways to interact with CSV files.
+<a href=https://www.sqlite.org/csv.html>CSV virtual tables</a> is a separate loadable library that provides efficient read-only access to
+CSV files. At the time of writing, however, the library is compiled separately from <code>sqlite</code> itself, making it a little cumbersome to use.
+Fortunately, <code>sqlite</code> has a very straightforward built-in way to interact with CSV files: <code>.mode csv</code>.
+<code>.mode csv</code> allows CSV files to be imported into existing table schema using <code>.import csv_filename table_name</code> and for the
+output of SQL queries to be written to CSV files using <code>.output csv_filename</code>.
+Below three shell functions are defined to easily allow the creation, querying and updating of CSV files using SQL.</p><p>Before defining the functions, let&rsquo;s see what kind of interaction becomes possible.
+Create a new CSV table called <code>people</code>. The table will have three fields, a text field called <code>name</code>, an integer field called <code>age</code>,
+and another text field <code>postcode</code>.
+Also create a table called <code>address</code> with <code>postcode</code> and <code>street</code> name.</p><div class=highlight><pre class=chroma><code class=language-sh data-lang=sh>$ <span class=nv>fields</span><span class=o>=</span><span class=s1>&#39;name text, age integer, postcode text&#39;</span>
+$ csv_create people <span class=nv>$fields</span>
+$ <span class=nv>afields</span><span class=o>=</span><span class=s1>&#39;postcode text, street text&#39;</span>
+$ csv_create address <span class=nv>$afields</span>
+</code></pre></div><p>Next insert some records into these tables to play with (any SQL expression can be used):</p><div class=highlight><pre class=chroma><code class=language-sh data-lang=sh>$ csv_update people <span class=s2>&#34;</span><span class=nv>$fields</span><span class=s2>&#34;</span> <span class=s2>&#34;insert into people(name, age, postcode) values(&#39;alice&#39;, 12, &#39;a1&#39;)&#34;</span>
+$ csv_update people <span class=s2>&#34;</span><span class=nv>$fields</span><span class=s2>&#34;</span> <span class=s2>&#34;insert into people(name, age, postcode) values(&#39;bob&#39;, 21, &#39;b2&#39;)&#34;</span>
+$ csv_update people <span class=s2>&#34;</span><span class=nv>$fields</span><span class=s2>&#34;</span> <span class=s2>&#34;insert into people(name, age, postcode) values(&#39;tom&#39;, 37, &#39;a1&#39;)&#34;</span>
+$ csv_update people <span class=s2>&#34;</span><span class=nv>$fields</span><span class=s2>&#34;</span> <span class=s2>&#34;insert into people(name, age, postcode) values(&#39;dick&#39;, 45, &#39;c3&#39;)&#34;</span>
+$ csv_update people <span class=s2>&#34;</span><span class=nv>$fields</span><span class=s2>&#34;</span> <span class=s2>&#34;insert into people(name, age, postcode) values(&#39;harry&#39;, 59, &#39;b2&#39;)&#34;</span>
+$ csv_update address <span class=s2>&#34;</span><span class=nv>$afields</span><span class=s2>&#34;</span> <span class=s2>&#34;insert into address(postcode, street) values(&#39;a1&#39;, &#39;the road&#39;)&#34;</span>
+$ csv_update address <span class=s2>&#34;</span><span class=nv>$afields</span><span class=s2>&#34;</span> <span class=s2>&#34;insert into address(postcode, street) values(&#39;b2&#39;, &#39;the street&#39;)&#34;</span>
+$ csv_update address <span class=s2>&#34;</span><span class=nv>$afields</span><span class=s2>&#34;</span> <span class=s2>&#34;insert into address(postcode, street) values(&#39;c3&#39;, &#39;the lane&#39;)&#34;</span>
+</code></pre></div><p>Basic queries against the CSV file:</p><div class=highlight><pre class=chroma><code class=language-sh data-lang=sh>$ csv_query people <span class=s2>&#34;</span><span class=nv>$fields</span><span class=s2>&#34;</span> <span class=s1>&#39;select * from people where age &lt; 30&#39;</span>
+alice,12,a1
+bob,21,b2
+</code></pre></div><p>Somewhat ineligantly two CSV files can be joined together:</p><div class=highlight><pre class=chroma><code class=language-sh data-lang=sh>$ sqlite3 :memory: <span class=s1>&#39;.mode csv&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s2>&#34;create table people(</span><span class=nv>$fields</span><span class=s2>)&#34;</span> <span class=s2>&#34;.import people.csv people&#34;</span> <span class=se>\
+</span><span class=se></span>    <span class=s2>&#34;create table address(</span><span class=nv>$afields</span><span class=s2>)&#34;</span> <span class=s2>&#34;.import address.csv address&#34;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;select name,street from people inner join address on people.postcode=address.postcode&#39;</span>
+alice,<span class=s2>&#34;the road&#34;</span>
+bob,<span class=s2>&#34;the street&#34;</span>
+tom,<span class=s2>&#34;the road&#34;</span>
+dick,<span class=s2>&#34;the lane&#34;</span>
+harry,<span class=s2>&#34;the street&#34;</span>
+</code></pre></div><h1 id=csv-sql-shell-functions>CSV SQL shell functions</h1><p>Here are some simple shell functions that use sqlite for single CSV file access.</p><div class=highlight><pre class=chroma><code class=language-sh data-lang=sh><span class=k>function</span> csv_create <span class=o>{</span>
+    <span class=nb>local</span> <span class=nv>name</span><span class=o>=</span><span class=nv>$1</span>
+    touch <span class=nv>$name</span>.csv
+<span class=o>}</span>
+
+<span class=k>function</span> csv_query <span class=o>{</span>
+    <span class=nb>local</span> <span class=nv>name</span><span class=o>=</span><span class=nv>$1</span>
+    <span class=nb>shift</span>
+    <span class=nb>local</span> <span class=nv>fields</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span>
+    <span class=nb>shift</span>
+    sqlite3 :memory: <span class=s1>&#39;.mode csv&#39;</span> <span class=s2>&#34;create table </span><span class=nv>$name</span><span class=s2>(</span><span class=nv>$fields</span><span class=s2>)&#34;</span> <span class=s2>&#34;.import </span><span class=nv>$name</span><span class=s2>.csv </span><span class=nv>$name</span><span class=s2>&#34;</span> <span class=s2>&#34;</span><span class=nv>$@</span><span class=s2>&#34;</span>
+<span class=o>}</span>
+
+<span class=k>function</span> csv_update <span class=o>{</span>
+    <span class=nb>local</span> <span class=nv>name</span><span class=o>=</span><span class=nv>$1</span>
+    <span class=nb>shift</span>
+    <span class=nb>local</span> <span class=nv>fields</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span>
+    <span class=nb>shift</span>
+    csv_query <span class=s2>&#34;</span><span class=nv>$name</span><span class=s2>&#34;</span> <span class=s2>&#34;</span><span class=nv>$fields</span><span class=s2>&#34;</span> <span class=s2>&#34;</span><span class=nv>$@</span><span class=s2>&#34;</span> <span class=s2>&#34;.output </span><span class=nv>$name</span><span class=s2>.csv&#34;</span> <span class=s2>&#34;select * from </span><span class=nv>$name</span><span class=s2>&#34;</span>
+<span class=o>}</span>
+</code></pre></div><h2 id=more-fiddly-primary-keys>More fiddly: primary keys</h2><p>When primary keys are involved, explicit casts are required.
+Table creation is the same as above.</p><div class=highlight><pre class=chroma><code class=language-sh data-lang=sh>$ sqlite3 :memory: <span class=s1>&#39;.mode csv&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;create table test(id integer primary key, name text, age integer)&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;insert into test(name, age) values (&#34;alice&#34;, 60)&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;insert into test(name, age) values (&#34;bob&#34;, 70)&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;insert into test(name, age) values (&#34;charlie&#34;, 65)&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;insert into test(name, age) values (&#34;dave&#34;, 55)&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;insert into test(name, age) values (&#34;edith&#34;, 70)&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;.headers on&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;.output test.csv&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;select * from test&#39;</span>
+</code></pre></div><p>Loading data for querying or updating is more complicated, as explicit casts are required:</p><div class=highlight><pre class=chroma><code class=language-sh data-lang=sh>$ sqlite3 :memory: <span class=s1>&#39;.mode csv&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;create table test(id integer primary key, name text, age integer)&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;.import test.csv test_tmp&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;insert into test select cast(id as integer), cast(age as integer), name from test_tmp&#39;</span> <span class=se>\
+</span><span class=se></span>    <span class=s1>&#39;select * from test&#39;</span>
+</code></pre></div></div><footer class="post-footer clearfix"><p class=post-tags><span>Tagged:</span>
+<a href=/tags/data/>data</a></p></footer></article></div></div></div><footer class=footer><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class="button-square button-jump-top js-jump-top" href=#><i class="fa fa-angle-up"></i></a></div><p class=footer-copyright><span>&copy; 2018-2022 root(at)host</span></p></div></footer><script src=/js/jquery-1.11.3.min.js></script><script src=/js/jquery.fitvids.js></script><script src=/js/scripts.js></script></body><script data-goatcounter=https://ioctl_uk.goatcounter.com/count async src=//gc.zgo.at/count.js></script></html>

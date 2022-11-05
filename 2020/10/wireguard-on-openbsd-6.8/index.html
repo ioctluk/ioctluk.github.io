@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>Wireguard on OpenBSD 6.8 &middot; root(at)host</title>
+        <meta name="description" content="OpenBSD 6.8 includes WireGuard . WireGuard allows one to build VPNs. For a long time, OpenBSD has had excellent IPsec support. Unfortunately the same cannot be said of IPSec support on other platforms, and inevitably a VPN relies upon good software for all parties to VPN. WireGuard is pretty good on all platforms, making it very attractive. By pretty good, I mean: straightforward to use and well-engineered (fast, secure, code quality, crypto design, etc).">
+        <meta name="HandheldFriendly" content="True">
+        <meta name="MobileOptimized" content="320">
+        <meta name="generator" content="Hugo 0.71.0-DEV" />
+        <meta name="robots" content="index,follow">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <link rel="stylesheet" href="/styles/styles.css">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&subset=latin,cyrillic-ext,latin-ext,cyrillic">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+        
+        
+        
+        
+    </head>
+    <body>
+        
+
+        <div id="wrapper">
+            <header class="site-header">
+                <div class="container">
+                    <div class="site-title-wrapper">
+                        
+                            <h1 class="site-title">
+                                <a title="ioctl.uk" href="/">ioctl.uk</a>
+                            </h1>
+                        
+                        <a class="button-square" href="/index.xml"><i class="fa fa-rss"></i></a>
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                    </div>
+
+                    <ul class="site-nav">
+                        
+    <li class="site-nav-item">
+        <a title="home" href="/">home</a>
+    </li>
+
+    <li class="site-nav-item">
+        <a title="tags" href="/tags/">tags</a>
+    </li>
+
+                    </ul>
+                </div>
+            </header>
+
+            <div id="container">
+
+
+<div class="container">
+    <article class="post-container">
+        <header class="post-header">
+    <h1 class="post-title">Wireguard on OpenBSD 6.8</h1>
+    
+</header>
+
+        <div class="post-content clearfix">
+    
+
+    <p><a href="https://www.OpenBSD.org/">OpenBSD</a>
+ 6.8 includes <a href="https://en.wikipedia.org/wiki/WireGuard">WireGuard</a>
+. WireGuard allows one to build VPNs.
+For a long time, OpenBSD has had excellent <a href="https://en.wikipedia.org/wiki/IPsec">IPsec</a>
+ support. Unfortunately the same cannot be said of IPSec support on other platforms, and inevitably a VPN relies upon good software for all parties to VPN.
+WireGuard is pretty good on all platforms, making it very attractive.
+By pretty good, I mean: straightforward to use and well-engineered (fast, secure, code quality, crypto design, etc).
+Naturally though, just how well-engineered WireGuard is will be seen over the coming decades, so this is the hardest attribute to assess correctly.</p>
+<p>Here I will describe my setup under OpenBSD: it is really just a summary of
+information already available in <a href="https://man.openbsd.org/wg.4">wg(4)</a>
+, <a href="https://man.openbsd.org/ifconfig.8">ifconfig(8)</a>
+,
+<a href="https://man.openbsd.org/hostname.if.5">hostname.if(5)</a>
+, as well as the documentation for the wireguard-tools
+package.</p>
+<p>We will use <code>10.1.1.0/16</code> and <code>2001:0db8:85a3:1::/80</code> as the VPN address ranges and the VPN server
+has a DNS name of <code>vpn.ioctl.uk</code> and will run on port <code>51820</code>; replaces these appropriately.</p>
+<p>First up, let&rsquo;s create the <a href="https://man.openbsd.org/wg.4">wg(4)</a>
+ interface wg0.
+Generate a fresh private key:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ openssl rand -base64 <span class="m">32</span>
+</code></pre></div><p>Then create the <a href="https://man.openbsd.org/hostname.if.5">hostname.if(5)</a>
+ file:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ doas tee /etc/hostname.wg0 <span class="s">&lt;&lt;EOF
+</span><span class="s">destroy
+</span><span class="s">create
+</span><span class="s">wgport 51820 wgkey INSERT_HERE
+</span><span class="s">inet 10.1.1.1 255.255.255.0
+</span><span class="s">inet6 2001:0db8:84a3:1::1 80
+</span><span class="s">EOF</span>
+</code></pre></div><p>Save the public key:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ doas cat /etc/hostname.wg0 <span class="p">|</span> awk <span class="s1">&#39;$3 ~ /wgkey/ {print $4}&#39;</span> <span class="p">|</span> <span class="se">\
+</span><span class="se"></span>     wg pubkey <span class="p">|</span> doas tee /etc/wireguard/vpn.pub
+</code></pre></div><p>The <code>wg</code> command comes from the <code>wireguard-tools</code> package, available from
+ports: <code>pkg_add wireguard-tools</code> if you do not have it already.</p>
+<p>I like to make it easy to add another host, so I add the following script in <code>/etc/wireguard/add</code>:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell"><span class="cp">#!/bin/sh
+</span><span class="cp"></span>
+<span class="nb">umask</span> <span class="m">077</span>
+<span class="nv">host</span><span class="o">=</span><span class="nv">$1</span>
+<span class="nv">id</span><span class="o">=</span><span class="nv">$2</span>
+<span class="k">if</span> <span class="o">[</span> -z <span class="s2">&#34;</span><span class="nv">$host</span><span class="s2">&#34;</span> -o -z <span class="s2">&#34;</span><span class="nv">$id</span><span class="s2">&#34;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="nb">echo</span> usage: <span class="nv">$0</span> host id
+    <span class="nb">exit</span> <span class="m">1</span>
+<span class="k">fi</span>
+<span class="k">if</span> <span class="o">[</span> <span class="s2">&#34;</span><span class="nv">$id</span><span class="s2">&#34;</span> <span class="o">=</span> <span class="m">1</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="nb">echo</span> bad id
+    <span class="nb">exit</span> <span class="m">1</span>
+<span class="k">fi</span>
+
+<span class="nv">key</span><span class="o">=</span>/etc/wireguard/<span class="nv">$host</span>.key
+<span class="nv">pub</span><span class="o">=</span>/etc/wireguard/<span class="nv">$host</span>.pub
+<span class="nv">psk</span><span class="o">=</span>/etc/wireguard/<span class="nv">$host</span>.psk
+<span class="nv">ip</span><span class="o">=</span>10.1.1.<span class="nv">$id</span>
+<span class="nv">ip6</span><span class="o">=</span>2001:0db8:84a3:1::<span class="nv">$id</span>
+<span class="k">if</span> <span class="o">[</span> -e <span class="nv">$key</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="nb">echo</span> <span class="nv">$key</span> already exists
+    <span class="nb">exit</span> <span class="m">1</span>
+<span class="k">fi</span>
+wg genkey <span class="p">|</span> tee <span class="nv">$key</span> <span class="p">|</span> wg pubkey &gt;<span class="nv">$pub</span>
+wg genkey &gt;<span class="nv">$psk</span>
+chmod <span class="m">400</span> <span class="nv">$key</span> <span class="nv">$pub</span> <span class="nv">$psk</span>
+cat &gt;&gt;/etc/hostname.wg0 <span class="s">&lt;&lt;EOF
+</span><span class="s"># $host
+</span><span class="s">wgpeer $(cat $pub) wgpsk $(cat $psk) wgaip $ip/32 wgaip $ip6/128
+</span><span class="s">EOF</span>
+cat &gt;/etc/wireguard/<span class="nv">$host</span>.conf <span class="s">&lt;&lt;EOF
+</span><span class="s">[Interface]
+</span><span class="s">Address = $ip/32, $ip6/128
+</span><span class="s">PrivateKey = $(cat $key)
+</span><span class="s">DNS = 10.1.1.1
+</span><span class="s">
+</span><span class="s">[Peer]
+</span><span class="s">PublicKey = $(cat /etc/wireguard/vpn.pub)
+</span><span class="s">PresharedKey = $(cat $psk)
+</span><span class="s">AllowedIPs = 0.0.0.0/0, ::0/0
+</span><span class="s">Endpoint = vpn.ioctl.uk:51820
+</span><span class="s">PersistentKeepAlive = 15
+</span><span class="s">EOF</span>
+</code></pre></div><p>And finally, another script for generating QR codes on the command line of the generated configurations.
+I put this in <code>/etc/wireguard/qr</code>:</p>
+<div class="highlight"><pre class="chroma"><code class="language-bash" data-lang="bash"><span class="cp">#!/bin/sh
+</span><span class="cp"></span><span class="nv">host</span><span class="o">=</span><span class="nv">$1</span>
+<span class="k">if</span> <span class="o">[</span> -z <span class="s2">&#34;</span><span class="nv">$host</span><span class="s2">&#34;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="nb">echo</span> usage: <span class="nv">$0</span> host
+    <span class="nb">exit</span> <span class="m">1</span>
+<span class="k">fi</span>
+qrencode -t ansiutf8 &lt;/etc/wireguard/<span class="nv">$host</span>.conf
+</code></pre></div><p>Make the scripts executable:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ chmod +x /etc/wireguard/<span class="o">{</span>qr,add<span class="o">}</span>
+</code></pre></div><p>Now enrolling a new host is very straightforward. Pick an id for the host between <code>2</code> and <code>255</code>.
+Suppose we wish to add a new host called <code>alice</code> as id <code>2</code> and another called <code>bob</code> as id <code>3</code>:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ doas /etc/wireguard/add alice <span class="m">2</span>
+$ doas /etc/wireguard/add bob <span class="m">3</span>
+$ doas sh /etc/netstart wg0
+</code></pre></div><p>Client configuration is very simple.</p>
+<ul>
+<li>Under Linux, for example, copy <code>/etc/wireguard/alice.conf</code> to <code>/etc/wireguard/wg0.conf</code>, then run on the Linux machine:</li>
+</ul>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ sudo wg-quick up wg0
+</code></pre></div><ul>
+<li>On devices with a camera, use the QR code. On the VPN server run and scan the output:</li>
+</ul>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ doas /etc/wireguard/qr alice
+</code></pre></div><p>Note, once a host is set up you can remove the corresponding <code>.key</code> and <code>.conf</code> files in <code>/etc/wireguard</code> on the VPN server.
+If you run into problems, on the VPN server run:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ doas ifconfig wg0 debug
+</code></pre></div><p>then check the output of <a href="https://man.openbsd.org/dmesg.8">dmesg(8)</a>
+ to see messages. The end of <a href="https://man.openbsd.org/wg.4">wg(4)</a>
+ has list of good diagnostics.
+To switch off debugging:</p>
+<div class="highlight"><pre class="chroma"><code class="language-shell" data-lang="shell">$ doas ifconfig wg0 -debug
+</code></pre></div><h1 id="thanks">Thanks</h1>
+<p>Nate Houghton for spotting a typo in the <code>add</code> script and suggesting variable usage.</p>
+
+</div>
+
+        <footer class="post-footer clearfix">
+    
+        <p class="post-tags">
+            <span>Tagged:</span>
+            
+            
+                <a href="/tags/openbsd/">openbsd</a>, 
+            
+                <a href="/tags/security/">security</a>, 
+            
+                <a href="/tags/crypto/">crypto</a>
+            
+        </p>
+    
+</footer>
+
+    </article>
+</div>
+
+            </div>
+        </div>
+
+        <footer class="footer">
+            <div class="container">
+                <div class="site-title-wrapper">
+                    <h1 class="site-title">
+                        <a title="ioctl.uk" href="/">ioctl.uk</a>
+                    </h1>
+                    <a class="button-square button-jump-top js-jump-top" href="#">
+                        <i class="fa fa-angle-up"></i>
+                    </a>
+                </div>
+
+                <p class="footer-copyright">
+                    <span>&copy; 2018-2022 root(at)host</span>
+                </p>
+            </div>
+        </footer>
+
+        <script src="/js/jquery-1.11.3.min.js"></script>
+        <script src="/js/jquery.fitvids.js"></script>
+        <script src="/js/scripts.js"></script>
+    </body>
+    <script data-goatcounter="https://ioctl_uk.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</html>
+

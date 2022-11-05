@@ -1,0 +1,87 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>OpenBSD Hardening Tricks &#183; root(at)host</title><meta name=description content="OpenBSD is locked down by default. Here are a few extra steps that can be taken.
+Harden malloc OpenBSD &rsquo;s malloc(3) performs many checks by default. Further checks can be enabled as follows:
+# Under OpenBSD 6.4 or earlier $ doas ln -s CFGU /etc/malloc.conf # Under OpenBSD 6.5 or later $ doas sysctl -w vm.malloc_conf=CFGU Accounting Accounting provides a log of all commands run, via lastcomm(1) and summarise via sa(8) ."><meta name=HandheldFriendly content="True"><meta name=MobileOptimized content="320"><meta name=generator content="Hugo 0.71.0-DEV"><meta name=robots content="index,follow"><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/styles/styles.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&subset=latin,cyrillic-ext,latin-ext,cyrillic"><link rel=stylesheet href=https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css integrity=sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN crossorigin=anonymous></head><body><div id=wrapper><header class=site-header><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class=button-square href=/index.xml><i class="fa fa-rss"></i></a></div><ul class=site-nav><li class=site-nav-item><a title=home href=/>home</a></li><li class=site-nav-item><a title=tags href=/tags/>tags</a></li></ul></div></header><div id=container><div class=container><article class=post-container><header class=post-header><h1 class=post-title>OpenBSD Hardening Tricks</h1></header><div class="post-content clearfix"><p><a href=https://www.OpenBSD.org/>OpenBSD</a>
+is locked down by default. Here are a few extra steps that can be taken.</p><h1 id=harden-malloc>Harden <code>malloc</code></h1><p><a href=https://www.OpenBSD.org/>OpenBSD</a>
+&rsquo;s <a href=https://man.openbsd.org/malloc.3>malloc(3)</a>
+performs many checks by default.
+Further checks can be enabled as follows:</p><div class=highlight><pre class=chroma><code class=language-plain data-lang=plain># Under OpenBSD 6.4 or earlier
+$ doas ln -s CFGU /etc/malloc.conf
+# Under OpenBSD 6.5 or later
+$ doas sysctl -w vm.malloc_conf=CFGU
+</code></pre></div><h1 id=accounting>Accounting</h1><p>Accounting provides a log of all commands run, via <a href=https://man.openbsd.org/lastcomm.1>lastcomm(1)</a>
+and
+summarise via <a href=https://man.openbsd.org/sa.8>sa(8)</a>
+.
+Furthermore, the <code>daily</code> <a href=https://man.openbsd.org/crontab.5>crontab(5)</a>
+uses accounting to check for abnormal exits and reports it.</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ doas rcctl <span class=nb>enable</span> accounting
+</code></pre></div><h1 id=disable-sshd-password-authentication-and-root-login>Disable <code>sshd</code> password authentication and root login</h1><p>Edit <code>/etc/ssh/sshd_config</code> and replace:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=c1># PasswordAuthentication yes</span>
+<span class=c1># PermitRootLogin prohibit-password</span>
+</code></pre></div><p>with</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>PasswordAuthentication no
+PermitRootLogin no
+</code></pre></div><h1 id=sysctl-tuning><code>sysctl</code> tuning</h1><p>Add to <code>/etc/sysctl.conf</code>:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>ddb.panic<span class=o>=</span><span class=m>0</span>
+machdep.allowaperture<span class=o>=</span><span class=m>0</span>
+</code></pre></div><h1 id=generate-mtree-checksum-files>Generate <code>mtree</code> checksum files</h1><p><a href=https://man.openbsd.org/security.8>security(8)</a>
+will regularly check for file modifications if current values
+are recorded in <code>/etc/mtree</code>.
+The following script will generate these files for common binaries and libraries.</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=cp>#!/bin/sh
+</span><span class=cp></span><span class=nb>set</span> -e
+<span class=nv>update</span><span class=o>=</span><span class=m>1</span>
+<span class=k>for</span> path in /bin /sbin /usr/bin /usr/sbin /usr/lib /usr/libexec /usr/mdec /usr/share/relink<span class=p>;</span> <span class=k>do</span>
+    <span class=nv>name</span><span class=o>=</span><span class=k>$(</span><span class=nb>echo</span> <span class=nv>$path</span> <span class=p>|</span> cut -d/ -f2- <span class=p>|</span> tr / .<span class=k>)</span>
+    <span class=nv>fname</span><span class=o>=</span>/etc/mtree/<span class=nv>$name</span>.secure
+    <span class=nv>tokens</span><span class=o>=</span>type,uid,gid,mode,nlink,size,link,sha256digest
+	<span class=nv>filters</span><span class=o>=</span><span class=s2>&#34;&#34;</span>
+	<span class=k>if</span> <span class=o>[</span> <span class=nv>$path</span> <span class=o>=</span> /usr/share/relink <span class=o>]</span>
+	<span class=k>then</span>
+		<span class=nv>filters</span><span class=o>=</span><span class=s2>&#34;s/\([[:space:]]bsd\)[[:space:]].*/\1 gid=21 mode=0770/; \
+</span><span class=s2>			s/\([[:space:]]newbsd.gdb\)[[:space:]].*/\1 gid=21 mode=0770/; \
+</span><span class=s2>			s/\([[:space:]]gap.link\)[[:space:]].*/\1 mode=0660/; \
+</span><span class=s2>			s/\([[:space:]]lorder\)[[:space:]].*/\1 mode=0660/; \
+</span><span class=s2>			s/\([[:space:]]gap\.o\)[[:space:]].*/\1 gid=21 mode=0770/; \
+</span><span class=s2>			s/\([[:space:]]relink\.log\)[[:space:]].*/\1 mode=0640/&#34;</span>
+	<span class=k>elif</span> <span class=o>[</span> <span class=nv>$path</span> <span class=o>=</span> /usr/libexec <span class=o>]</span>
+	<span class=k>then</span>
+		<span class=nv>filters</span><span class=o>=</span><span class=s2>&#34;s/\([[:space:]]ld\.so\)[[:space:]].*/\1 mode=0444/; \
+</span><span class=s2>			s/\([[:space:]]ld\.so\.save\)[[:space:]].*/\1 mode=0444/&#34;</span>
+	<span class=k>elif</span> <span class=o>[</span> <span class=nv>$path</span> <span class=o>=</span> /usr/lib <span class=o>]</span>
+	<span class=k>then</span>
+		<span class=nv>filters</span><span class=o>=</span><span class=s2>&#34;s/\([[:space:]]libc\.so\.[0-9.]*\)[[:space:]].*/\1/; \
+</span><span class=s2>			s/\([[:space:]]libcrypto\.so\.[0-9.]*\)[[:space:]].*/\1/&#34;</span>
+	<span class=k>fi</span>
+    <span class=k>if</span> <span class=o>[</span> ! -e <span class=nv>$fname</span> -o <span class=nv>$update</span> -eq <span class=m>1</span> <span class=o>]</span>
+    <span class=k>then</span>
+		<span class=nb>echo</span> filters: <span class=nv>$filters</span>
+		mtree -cx -p <span class=nv>$path</span> -k <span class=nv>$tokens</span> <span class=p>|</span> <span class=se>\
+</span><span class=se></span>			egrep -v <span class=s1>&#39;^#[[:space:]]*(machine|user|date):&#39;</span> <span class=p>|</span> <span class=se>\
+</span><span class=se></span>	    	sed -e :a  -e <span class=s1>&#39;/\\$/N; s/\\\n//; ta&#39;</span> <span class=p>|</span> <span class=se>\
+</span><span class=se></span>			sed -e <span class=s2>&#34;</span><span class=nv>$filters</span><span class=s2>&#34;</span> <span class=p>|</span> <span class=se>\
+</span><span class=se></span>			tee <span class=nv>$fname</span>.new &gt;/dev/null
+        diff -u <span class=nv>$fname</span> <span class=nv>$fname</span>.new <span class=o>||</span> <span class=nb>true</span>
+        rm <span class=nv>$fname</span> <span class=o>||</span> <span class=nb>true</span>
+        mv <span class=nv>$fname</span>.new <span class=nv>$fname</span>
+        <span class=nb>echo</span> update <span class=nv>$fname</span>
+    <span class=k>fi</span>
+<span class=k>done</span>
+chown root:wheel /etc/mtree/*.secure
+chmod <span class=m>640</span> /etc/mtree/*.secure
+sha256 /etc/mtree/*.secure                                                                                                           
+</code></pre></div><p>For a recently patched OpenBSD 7.1, I have:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>SHA256 <span class=o>(</span>/etc/mtree/bin.secure<span class=o>)</span> <span class=o>=</span> e0d668dceebecbea6b905bb0581fbc3fdc2c36edc3627133b3b7b9b5b5b0ec63
+SHA256 <span class=o>(</span>/etc/mtree/sbin.secure<span class=o>)</span> <span class=o>=</span> d94493d3731196456c18f5b457b630ae5ffc44f3c7dac99aa24dfe21ac05a273
+SHA256 <span class=o>(</span>/etc/mtree/usr.bin.secure<span class=o>)</span> <span class=o>=</span> 6c3fa02d2dbeb2460e7d9e6083a5c11f21ad5b63cdf247291fb388fbc6c14196
+SHA256 <span class=o>(</span>/etc/mtree/usr.lib.secure<span class=o>)</span> <span class=o>=</span> 9684cd5ca149a2f0947a78da4b00625bdce9bc60f0ec599509a188305fdcb298
+SHA256 <span class=o>(</span>/etc/mtree/usr.libexec.secure<span class=o>)</span> <span class=o>=</span> 3786adf0fc340ad5b3b1c8e5fcd85a12e55f77db82a7b1aaadcf042113eb2c27
+SHA256 <span class=o>(</span>/etc/mtree/usr.mdec.secure<span class=o>)</span> <span class=o>=</span> da40d43c064bf0c90b01c03153e7fb48145cea16d8326d2daecf87f45a669282
+SHA256 <span class=o>(</span>/etc/mtree/usr.sbin.secure<span class=o>)</span> <span class=o>=</span> a5617c1be149df70cce1ef51e2e3c1901134a75db132de1b495cb0baadd76e42
+SHA256 <span class=o>(</span>/etc/mtree/usr.share.relink.secure<span class=o>)</span> <span class=o>=</span> 9322a7874f615543da1485bb70462b6839b79566e6acf83f4b49395efb6d6f7a
+</code></pre></div><p>Note: these checksums are comparable across hosts but not architectures; the above is for amd64.</p><p>To check manually</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=k>for</span> file in /etc/mtree/*.secure
+<span class=k>do</span>
+	<span class=nv>path</span><span class=o>=</span><span class=k>$(</span>awk <span class=s1>&#39;/tree:/ {print $3; exit}&#39;</span> &lt;<span class=nv>$file</span><span class=k>)</span>
+	<span class=nb>echo</span> checking <span class=nv>$path</span>
+	doas mtree -p <span class=nv>$path</span> -f <span class=nv>$file</span>
+<span class=k>done</span>
+
+</code></pre></div><h1 id=audit>Audit</h1><p>Run a standard suite of sanity checks:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ doas pkg_add lynis
+$ doas lynis audit system
+</code></pre></div></div><footer class="post-footer clearfix"><p class=post-tags><span>Tagged:</span>
+<a href=/tags/openbsd/>openbsd</a>,
+<a href=/tags/security/>security</a></p></footer></article></div></div></div><footer class=footer><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class="button-square button-jump-top js-jump-top" href=#><i class="fa fa-angle-up"></i></a></div><p class=footer-copyright><span>&copy; 2018-2022 root(at)host</span></p></div></footer><script src=/js/jquery-1.11.3.min.js></script><script src=/js/jquery.fitvids.js></script><script src=/js/scripts.js></script></body><script data-goatcounter=https://ioctl_uk.goatcounter.com/count async src=//gc.zgo.at/count.js></script></html>

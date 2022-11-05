@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>Ultimate OpenBSD pf(8) set up &middot; root(at)host</title>
+        <meta name="description" content="OpenBSD &rsquo;s pf(8) is a very powerful firewall. A simple set of firewall rules are easier to maintain, evaluate, and construct correctly. Modern networks can be quite complicated. Here I shall outline some ways to navigate the complicated demands made of a modern firewall using the features of pf(8) .
+The old adage that the OpenBSD team do such a great job at documentation that other documentation inevitably is of lower quality or becomes out of date is true.">
+        <meta name="HandheldFriendly" content="True">
+        <meta name="MobileOptimized" content="320">
+        <meta name="generator" content="Hugo 0.71.0-DEV" />
+        <meta name="robots" content="index,follow">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <link rel="stylesheet" href="/styles/styles.css">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&subset=latin,cyrillic-ext,latin-ext,cyrillic">
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+        
+        
+        
+        
+    </head>
+    <body>
+        
+
+        <div id="wrapper">
+            <header class="site-header">
+                <div class="container">
+                    <div class="site-title-wrapper">
+                        
+                            <h1 class="site-title">
+                                <a title="ioctl.uk" href="/">ioctl.uk</a>
+                            </h1>
+                        
+                        <a class="button-square" href="/index.xml"><i class="fa fa-rss"></i></a>
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                        
+                    </div>
+
+                    <ul class="site-nav">
+                        
+    <li class="site-nav-item">
+        <a title="home" href="/">home</a>
+    </li>
+
+    <li class="site-nav-item">
+        <a title="tags" href="/tags/">tags</a>
+    </li>
+
+                    </ul>
+                </div>
+            </header>
+
+            <div id="container">
+
+
+<div class="container">
+    <article class="post-container">
+        <header class="post-header">
+    <h1 class="post-title">Ultimate OpenBSD pf(8) set up</h1>
+    
+</header>
+
+        <div class="post-content clearfix">
+    
+
+    <p><a href="https://www.OpenBSD.org/">OpenBSD</a>
+&rsquo;s <a href="https://man.openbsd.org/pf.8">pf(8)</a>
+ is a very powerful firewall.
+A simple set of firewall rules are easier to maintain, evaluate, and construct correctly.
+Modern networks can be quite complicated.
+Here I shall outline some ways to navigate the complicated demands made of a modern firewall using the features of <a href="https://man.openbsd.org/pf.8">pf(8)</a>
+.</p>
+<p>The old adage that the <a href="https://www.OpenBSD.org/">OpenBSD</a>
+ team do such a great job at documentation that other documentation inevitably is of lower quality or becomes out of date is true. <a href="https://man.openbsd.org/pf.conf.5">pf.conf(5)</a>
+ is your friend. Nonetheless.</p>
+<h1 id="openbsds-network-stack-is-your-friend">OpenBSD&rsquo;s network stack is your friend</h1>
+<p><a href="https://www.OpenBSD.org/">OpenBSD</a>
+&rsquo;s network stack is incredibly powerful.
+In fact, if you use <a href="https://man.openbsd.org/pf.8">pf(8)</a>
+ without using <a href="https://www.OpenBSD.org/">OpenBSD</a>
+ you are missing out.
+Before setting up <a href="https://man.openbsd.org/pf.8">pf(8)</a>
+, first give consideration to how traffic is routed through interfaces.
+To start with, traffic flows over hardware interfaces (such as <a href="https://man.openbsd.org/em.4">em(4)</a>
+ or <a href="https://man.openbsd.org/bge.4">bge(4)</a>
+).
+Everything after this is up to you.</p>
+<p>There are (roughly) four kinds of networking tools at your disposal, although details matter a lot.</p>
+<ul>
+<li>Encapsulation and tunnelling (packets contain other packets inside):
+<ul>
+<li><a href="https://man.openbsd.org/vlan.4">vlan(4)</a>
+ <a href="https://man.openbsd.org/svlan.4">svlan(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/pppoe.4">pppoe(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/enc.4">enc(4)</a>
+ for <a href="https://man.openbsd.org/ipsec.4">ipsec(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/etherip.4">etherip(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/vxlan.4">vxlan(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/gre.4">gre(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/gif.4">gif(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/wg.4">wg(4)</a>
+</li>
+</ul>
+</li>
+<li>Bridging (echo incoming packets back out other interfaces):
+<ul>
+<li><a href="https://man.openbsd.org/tpmr.4">tpmr(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/bridge.4">bridge(4)</a>
+ and <a href="https://man.openbsd.org/vether.4">vether(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/veb.4">veb(4)</a>
+ and <a href="https://man.openbsd.org/vport.4">vport(4)</a>
+</li>
+</ul>
+</li>
+<li>Aggregation and failover (treat many interfaces or hosts equally, sometimes under failure):
+<ul>
+<li><a href="https://man.openbsd.org/trunk.4">trunk(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/aggr.4">aggr(4)</a>
+</li>
+<li><a href="https://man.openbsd.org/carp.4">carp(4)</a>
+</li>
+</ul>
+</li>
+</ul>
+<p>By carefully constructing your network configuration, you can greatly simplify your <a href="https://man.openbsd.org/pf.conf.5">pf.conf(5)</a>
+.
+In general, avoid filtering that which you do not want to filter (e.g., bridge traffic without filtering if so desired).
+Try to have packets that will be subject to the same policy to come out on the same interface (e.g., by using virtual lans and
+aggregation, so that policy can be specified in terms of these).
+Likewise, don&rsquo;t create one <a href="https://man.openbsd.org/wg.4">wg(4)</a>
+ for each client. One will suffice and make rules simpler.
+Suppose you have several VLANs spanning several physical interfaces that you wish to bridge and then filter the traffic coming into the host.
+First create <a href="https://man.openbsd.org/vlan.4">vlan(4)</a>
+ interfaces on each underlying physical interface, then
+bridge (using <a href="https://man.openbsd.org/veb.4">veb(4)</a>
+ and <a href="https://man.openbsd.org/vport.4">vport(4)</a>
+).
+Then filters on incoming data to the host can be applied once on the <a href="https://man.openbsd.org/vport.4">vport(4)</a>
+ associated with a specific VLAN.</p>
+<p>There are a great many features within each of these kinds of interfaces,
+sometimes surprising: <a href="https://man.openbsd.org/ifconfig.8">ifconfig(8)</a>
+ and <a href="https://man.openbsd.org/hostname.if.5">hostname.if(5)</a>
+ is worth
+a read.</p>
+<h1 id="etcpfconf-structure">/etc/pf.conf structure</h1>
+<p>I prefer to structure my <code>/etc/pf.conf</code> as follows:</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain"># prelude:
+#  - macros
+#  - tables
+#  - global options
+
+# rules:
+#  - global
+#    - queueing and priorities
+#    - scrubbing
+#    - no nonsense blocks
+#  - anchors inbound
+#  - anchors outbound
+</code></pre></div><h1 id="prelude-state-your-axioms">Prelude: State your axioms</h1>
+<p>I like to begin my <a href="https://man.openbsd.org/pf.conf.5">pf.conf(5)</a>
+ with a set of macros, tables and then global options.
+These are the axioms of the rules, upon which everything else is built.</p>
+<p>Interface names, subnets and ports do not describe their role, so I define some
+alternate names:</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">external_if=trunk0
+internal_if=vport99
+iot_if=vport50
+vpn_if=wg0
+
+internal_subnet=&#34;10.1.0.0/16&#34;
+iot_subnet=&#34;10.2.0.0/16&#34;
+vpn_subnet=&#34;10.3.0.0/16&#34;
+
+iperf3_tcp=5201
+# common scan targets: smb, redis, telnet, some sql server, m$ rdp
+decoy_ports=&#34;{445 6379 23 1498 3389}&#34;
+</code></pre></div><h1 id="global-rules">Global rules</h1>
+<p>Next, before worrying about what might or might not flow or where it might go,
+I like to set some basic rule on priorization and queuing and also making sure
+that, unless I saw so, everything is blocked.</p>
+<div class="highlight"><pre class="chroma"><code class="language-plain" data-lang="plain">block log in all
+block log (user) out all
+
+block log in proto tcp to port $decoy_ports \
+    synproxy state (max 0, overload &lt;decoyhosts&gt; flush global) label &#34;decoy:$dstport&#34;
+</code></pre></div>
+</div>
+
+        <footer class="post-footer clearfix">
+    
+        <p class="post-tags">
+            <span>Tagged:</span>
+            
+            
+                <a href="/tags/security/">security</a>, 
+            
+                <a href="/tags/openbsd/">openbsd</a>
+            
+        </p>
+    
+</footer>
+
+    </article>
+</div>
+
+            </div>
+        </div>
+
+        <footer class="footer">
+            <div class="container">
+                <div class="site-title-wrapper">
+                    <h1 class="site-title">
+                        <a title="ioctl.uk" href="/">ioctl.uk</a>
+                    </h1>
+                    <a class="button-square button-jump-top js-jump-top" href="#">
+                        <i class="fa fa-angle-up"></i>
+                    </a>
+                </div>
+
+                <p class="footer-copyright">
+                    <span>&copy; 2018-2022 root(at)host</span>
+                </p>
+            </div>
+        </footer>
+
+        <script src="/js/jquery-1.11.3.min.js"></script>
+        <script src="/js/jquery.fitvids.js"></script>
+        <script src="/js/scripts.js"></script>
+    </body>
+    <script data-goatcounter="https://ioctl_uk.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</html>
+

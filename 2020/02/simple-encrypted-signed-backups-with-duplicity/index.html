@@ -1,0 +1,121 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Simple Encrypted, Signed Backups with Duplicity &#183; root(at)host</title><meta name=description content="Why use duplicityfor backups? It is a thin wrapper around common tools: gnupgfor cryptography, tar(1) for archiving, and rsyncfor file synchronisation. These are very widely used and widely available programs. They work on almost any platform. And these programs (plus your encryption key) are all you need to get to your back up if duplicity is not available. duplicity just makes it easier to create, verify, maintain and extract back ups."><meta name=HandheldFriendly content="True"><meta name=MobileOptimized content="320"><meta name=generator content="Hugo 0.71.0-DEV"><meta name=robots content="index,follow"><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/styles/styles.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&subset=latin,cyrillic-ext,latin-ext,cyrillic"><link rel=stylesheet href=https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css integrity=sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN crossorigin=anonymous></head><body><div id=wrapper><header class=site-header><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class=button-square href=/index.xml><i class="fa fa-rss"></i></a></div><ul class=site-nav><li class=site-nav-item><a title=home href=/>home</a></li><li class=site-nav-item><a title=tags href=/tags/>tags</a></li></ul></div></header><div id=container><div class=container><article class=post-container><header class=post-header><h1 class=post-title>Simple Encrypted, Signed Backups with Duplicity</h1></header><div class="post-content clearfix"><p>Why use duplicity for backups?
+It is a thin wrapper around common tools: gnupg for cryptography,
+<a href=https://man.openbsd.org/tar.1>tar(1)</a>
+for archiving, and rsync for file synchronisation.
+These are very widely used and widely available programs. They work on almost any platform.
+And these programs (plus your encryption key) are all you need to get to your back up if <code>duplicity</code> is not available.
+<code>duplicity</code> just makes it easier to create, verify, maintain and extract back ups.</p><p>My set up assumes there are three kinds of machines:</p><ol><li>A NAS or server that stores the back ups (and sync with some cloud provider)</li><li>Machines you want to backup.</li><li>A keyring machine where you keep your NAS key and a keyring of all the public keys of all machines you backup.</li></ol><p>A full backup is made every month, and incremental backups are made every day.
+You can easily tweak the scheduling below.</p><h1 id=set-up-a-nas-key-pair>Set up a NAS key pair</h1><p>Generate a NAS gpg key pair on the keyring machine:</p><pre><code>gpg --expert --full-gen-key
+</code></pre><p>Set options: 9: ECC and ECC, 1: Curve 25519, never expire, realname: $hostname backup, email: root@$hostname.local.
+Note the fingerprint of the NAS key (<code>NASFP</code>) and export it:</p><pre><code>gpg --armour --export NASFP
+</code></pre><h1 id=set-up-a-nas-to-store-backups>Set up a NAS to store backups</h1><p>We will refer to this machine as NAS for short; it is just the machine where you will store your backups.</p><ol><li>Create a backup share.</li><li>Create a machines group with no access except read only to backup share.</li><li>Create a user for each machine you wish to back up.<ol><li>Enable rsync access.</li><li>Create a directory in backup share with full control by that user.</li></ol></li></ol><p>I also synchronise the backup directory to an external cloud provider.</p><h1 id=set-up-back-up-on-a-machine>Set up back up on a machine</h1><p>Create a per-machine key pair</p><pre><code>sudo gpg --homedir=/root/.gnupg --expert --full-generate-key
+</code></pre><p>Set options: 9: ECC and ECC, 1: Curve 25519, never expire, realname: $hostname backup, email: root@$hostname.local.</p><p>Note the fingerprint of the machine keyring (<code>MACHINEFP</code>). Export it and import it locally to verify signed backups</p><pre><code>sudo gpg --homedir=/root/.gnupg --list-keys --with-fingerprint
+sudo gpg --homedir=/root/.gnupg --armour --export MACHINEFP &gt;/tmp/key.asc
+</code></pre><p>On the keyring host, import this key and set trust.</p><p>Paste in exported NAS public key (from the keyring host) and set trust:</p><pre><code>sudo gpg --homedir=/root/.gnupg --import
+sudo gpg --homedir=/root/.gnupg --edit-key NASFP
+</code></pre><p>Responses: trust, 5, y, save</p><p>Create a ssh key for the machine:</p><pre><code>sudo ssh-keygen -t ed25519 -f /root/.ssh/id_backup -N ''
+</code></pre><p>Copy it to the backup host, fix up permissions on <code>~</code> and <code>~/.ssh</code> then do:</p><pre><code>sudo ssh -i /root/.ssh/id_backup -vv $(hostname -s)@NAS
+</code></pre><p>Check authentication works and accept the host key of the NAS.</p><p>Create exclusion list, these are things you do not want to backup:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>    sudo tee /root/backup.exclude <span class=s>&lt;&lt;EOF
+</span><span class=s>/bin
+</span><span class=s>/dev
+</span><span class=s>/lib
+</span><span class=s>/lib32
+</span><span class=s>/lib64
+</span><span class=s>/libx32
+</span><span class=s>/media
+</span><span class=s>/mnt
+</span><span class=s>/proc
+</span><span class=s>/run
+</span><span class=s>/sbin
+</span><span class=s>/sys
+</span><span class=s>/tmp
+</span><span class=s>/usr
+</span><span class=s>/var/lock
+</span><span class=s>/var/tmp
+</span><span class=s>**/.*password-store
+</span><span class=s>**/.ssh
+</span><span class=s>**/.gnupg
+</span><span class=s>**/.cache
+</span><span class=s>**/Downloads
+</span><span class=s>/etc/*shadow*
+</span><span class=s>/etc/master.passwd
+</span><span class=s>/etc/spwd.db
+</span><span class=s>EOF</span>
+</code></pre></div><p>I prefer not to backup the OS, downloads, caches or any key material over the network.
+Key material I back up separately.</p><p>Create backup script in <code>/root/backup</code> and its configuration
+<code>/root/backup.conf</code>. In <code>/root/backup.conf</code> (below) update the NAS= variable to
+the fingerprint of the NAS key fron the keyring machine (<code>NASFP</code>). Update the
+default hostname, and the hosts fingerprint from above (<code>MACHINEFP</code>). Replace
+NAS with the hostname of your NAS or backup server and the appropriate path.
+Contents of <code>/root/backup.conf</code>:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=c1># config: fill these in</span>
+<span class=nv>hostname</span><span class=o>=</span>bar
+<span class=nv>HOST</span><span class=o>=</span>MACHINEFP
+<span class=nv>NAS</span><span class=o>=</span>NASFP
+<span class=k>if</span> <span class=o>[</span> -z <span class=s2>&#34;</span><span class=nv>$hostname</span><span class=s2>&#34;</span> <span class=o>]</span><span class=p>;</span> <span class=k>then</span>
+    <span class=nv>hostname</span><span class=o>=</span>foo
+<span class=k>fi</span>
+<span class=k>if</span> <span class=o>[</span> -z <span class=s2>&#34;</span><span class=nv>$BACKPATH</span><span class=s2>&#34;</span> <span class=o>]</span><span class=p>;</span> <span class=k>then</span>
+    <span class=nv>BACKPATH</span><span class=o>=</span><span class=s2>&#34;rsync://</span><span class=nv>$hostname</span><span class=s2>@NAS//volume1/backup/</span><span class=nv>$hostname</span><span class=s2>&#34;</span>
+    <span class=nv>POSTBACKUP</span><span class=o>=</span><span class=s2>&#34;:&#34;</span>
+<span class=k>fi</span>
+<span class=c1># end of config</span>
+</code></pre></div><p>Contents of <code>/root/backup</code>:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=cp>#!/bin/sh
+</span><span class=cp></span><span class=nv>CFG</span><span class=o>=</span>/root/backup.conf
+<span class=nv>opts</span><span class=o>=</span><span class=s2>&#34;&#34;</span>
+. <span class=s2>&#34;</span><span class=nv>$CFG</span><span class=s2>&#34;</span>
+<span class=nb>export</span> <span class=nv>HOME</span><span class=o>=</span>/root
+<span class=nb>export</span> <span class=nv>PATH</span><span class=o>=</span>/usr/local/bin:<span class=nv>$PATH</span>
+<span class=nv>opts</span><span class=o>=</span><span class=s2>&#34;--archive-dir /root/.cache/duplicity --name </span><span class=nv>$hostname</span><span class=s2>&#34;</span>
+<span class=nv>opts</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$opts</span><span class=s2> --ssh-options=&#39;-oIdentityFile=/root/.ssh/id_backup&#39;&#34;</span>
+<span class=nv>opts</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$opts</span><span class=s2> --hidden-encrypt-key </span><span class=nv>$NAS</span><span class=s2> --hidden-encrypt-key </span><span class=nv>$HOST</span><span class=s2> --sign-key </span><span class=nv>$HOST</span><span class=s2>&#34;</span>
+<span class=nv>opts</span><span class=o>=</span><span class=s2>&#34;</span><span class=nv>$opts</span><span class=s2> --exclude-if-present .nodump --exclude-filelist /root/backup.nodump --exclude-filelist /root/backup.exclude&#34;</span>
+
+<span class=k>if</span> <span class=o>[</span> <span class=s2>&#34;</span><span class=k>$(</span>uname -s<span class=k>)</span><span class=s2>&#34;</span> <span class=o>=</span> OpenBSD <span class=o>]</span>
+<span class=k>then</span>
+    find / -flags nodump &gt;/root/backup.nodump
+<span class=k>else</span>
+    <span class=nb>echo</span> consider running:
+    <span class=nb>echo</span> <span class=s2>&#34;find . -xdev -a \( -type f -o -type d \) -exec lsattr {} \; | grep &#39;^-*d&#39; | cut -d&#39; &#39; -f2-&#34;</span>
+    touch /root/backup.nodump
+<span class=k>fi</span>
+
+<span class=nb>export</span> <span class=nv>PASSPHRASE</span><span class=o>=</span><span class=s1>&#39;&#39;</span>
+<span class=nb>export</span> <span class=nv>SIGN_PASSPHRASE</span><span class=o>=</span><span class=s1>&#39;&#39;</span>
+<span class=k>if</span> <span class=o>[</span> <span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span> <span class=o>=</span> full <span class=o>]</span>
+<span class=k>then</span>
+    duplicity full <span class=nv>$opts</span> / <span class=nv>$BACKPATH</span>
+    <span class=nv>$POSTBACKUP</span>
+<span class=k>elif</span> <span class=o>[</span> <span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span> <span class=o>=</span> inc <span class=o>]</span>
+<span class=k>then</span>
+    duplicity incremental <span class=nv>$opts</span> / <span class=nv>$BACKPATH</span>
+    <span class=nv>$POSTBACKUP</span>
+<span class=k>elif</span> <span class=o>[</span> <span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span> <span class=o>=</span> verify <span class=o>]</span>
+<span class=k>then</span>
+    duplicity verify <span class=nv>$opts</span> -v4 <span class=nv>$BACKPATH</span> /
+<span class=k>elif</span> <span class=o>[</span> <span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span> <span class=o>=</span> status <span class=o>]</span>
+<span class=k>then</span>
+    duplicity collection-status <span class=nv>$opts</span> <span class=nv>$BACKPATH</span>
+<span class=k>elif</span> <span class=o>[</span> <span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span> <span class=o>=</span> ls <span class=o>]</span>
+<span class=k>then</span>
+    duplicity list-current-files <span class=nv>$opts</span> <span class=nv>$BACKPATH</span>
+<span class=k>elif</span> <span class=o>[</span> <span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span> <span class=o>=</span> restore <span class=o>]</span>
+<span class=k>then</span>
+    duplicity restore <span class=nv>$opts</span> <span class=nv>$BACKPATH</span> <span class=nv>$2</span>
+<span class=k>elif</span> <span class=o>[</span> <span class=s2>&#34;</span><span class=nv>$1</span><span class=s2>&#34;</span> <span class=o>=</span> prune <span class=o>]</span>
+<span class=k>then</span>
+    duplicity cleanup <span class=nv>$opts</span> --force <span class=nv>$BACKPATH</span>
+    duplicity remove-all-but-n-full <span class=m>6</span> <span class=nv>$opts</span> --force <span class=nv>$BACKPATH</span>
+    duplicity remove-all-inc-of-but-n-full <span class=m>3</span> <span class=nv>$opts</span> --force <span class=nv>$BACKPATH</span>
+<span class=k>else</span>
+    <span class=nb>echo</span> <span class=s2>&#34;usage: </span><span class=nv>$0</span><span class=s2> [full|inc|verify|status|ls|restore path|prune]&#34;</span>
+<span class=k>fi</span>
+</code></pre></div><p>Then run a full backup:
+sudo /root/backup full</p><p>Check verify the backup on the keyring host (replace <code>NASFP</code> with the fingerprint of the NAS key):</p><pre><code>PASSPHRASE='' duplicity list-current-files --encrypt-key NASFP rsync://NAS//volume1/backup/MACHINE
+</code></pre><h1 id=schedule-regular-backups>Schedule Regular Backups</h1><p>Here&rsquo;s how to schedule a monthly and daily backup.
+If you want a different frequency, adapt the last method.</p><p>There are roughly three ways to schedule daily and monthly backups, depending on which *nix you are dealing with.</p><ol><li>If <code>/etc/cron.daily</code> exists as a directory<ol><li>Create <code>/etc/cron.daily/zz-backup</code> and write <code>/root/backup inc</code> in it</li><li>Create <code>/etc/cron.monthly/zz-backup</code> and write <code>/root/backup full</code> in it</li></ol></li><li>If <code>/etc/daily</code> exists and is a script<ol><li>Append <code>/root/backup inc</code> to <code>/etc/daily.local</code></li><li>Append <code>/root/backup full</code> to <code>/etc/monthly.local</code></li></ol></li><li>Otherwise, run <code>sudo crontab -e</code> and add:</li></ol><div class=highlight><pre class=chroma><code class=language-fallback data-lang=fallback>HOME=/root
+15      3       1       *       *       /root/backup full
+17      10      2-31    *       *       /root/backup inc
+</code></pre></div><p>Enjoy!</p></div><footer class="post-footer clearfix"><p class=post-tags><span>Tagged:</span>
+<a href=/tags/crypto/>crypto</a>,
+<a href=/tags/backup/>backup</a>,
+<a href=/tags/security/>security</a></p></footer></article></div></div></div><footer class=footer><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class="button-square button-jump-top js-jump-top" href=#><i class="fa fa-angle-up"></i></a></div><p class=footer-copyright><span>&copy; 2018-2022 root(at)host</span></p></div></footer><script src=/js/jquery-1.11.3.min.js></script><script src=/js/jquery.fitvids.js></script><script src=/js/scripts.js></script></body><script data-goatcounter=https://ioctl_uk.goatcounter.com/count async src=//gc.zgo.at/count.js></script></html>

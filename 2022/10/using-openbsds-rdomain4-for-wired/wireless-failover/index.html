@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="IE=edge"><title>Using OpenBSD's rdomain(4) for wired/wireless failover &#183; root(at)host</title><meta name=description content="Fixed wire uplink connections for internet access are wonderful until they fail. Latency is low, bandwidth is high. Wireless uplinks have higher latency and lower bandwidth, so provide a lower quality uplink&ndash;but typically have better coverage.
+If there is a failure in the medium of either uplink (broken wires, or EM interference) then the failures are typically independent of one another, and so one can switch from one to the other to maintain an uplink throughout."><meta name=HandheldFriendly content="True"><meta name=MobileOptimized content="320"><meta name=generator content="Hugo 0.71.0-DEV"><meta name=robots content="index,follow"><meta name=viewport content="width=device-width,initial-scale=1"><link rel=stylesheet href=/styles/styles.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,400,600,700,300&subset=latin,cyrillic-ext,latin-ext,cyrillic"><link rel=stylesheet href=https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css integrity=sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN crossorigin=anonymous></head><body><div id=wrapper><header class=site-header><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class=button-square href=/index.xml><i class="fa fa-rss"></i></a></div><ul class=site-nav><li class=site-nav-item><a title=home href=/>home</a></li><li class=site-nav-item><a title=tags href=/tags/>tags</a></li></ul></div></header><div id=container><div class=container><article class=post-container><header class=post-header><h1 class=post-title>Using OpenBSD's rdomain(4) for wired/wireless failover</h1></header><div class="post-content clearfix"><p>Fixed wire uplink connections for internet access are wonderful until they fail.
+Latency is low, bandwidth is high.
+Wireless uplinks have higher latency and lower bandwidth, so provide a lower quality uplink&ndash;but
+typically have better coverage.</p><p>If there is a failure in the medium of either uplink (broken wires, or EM interference) then the failures are
+typically independent of one another, and so one can switch from one to the other to maintain an uplink throughout.
+The tricky bit, for me, has always been: how to determine the uplink quality? Actively probing it (e.g., by pinging
+a reliable internet host) is preferable, so both interfaces should, in
+principle, be accessible and up. But only one can be the default route.
+You could do this with some routing table fiddling, or, use <a href=https://man.openbsd.org/rdomain.4>rdomain(4)</a>
+which turns out to be very, very simple.</p><p>So the plan is:</p><ol><li>If all is well, use a fixed wire uplink (em0 below).</li><li>If the fixed wire uplink fails, and the wireless uplink is good, use the wireless uplink (urtwn0 below).</li><li>If nothing works, wait for something to come up, prefer em0 over urtwn0.</li></ol><p>The beauty of <a href=https://www.OpenBSD.org/>OpenBSD</a>
+is that it has a number of <em>simple</em> tools we can chain together to solve this.
+We will use <a href=https://man.openbsd.org/ifstated.8>ifstated(8)</a>
+, <a href=https://man.openbsd.org/rdomain.4>rdomain(4)</a>
+, and <a href=https://man.openbsd.org/ping.8>ping(8)</a>
+.
+There&rsquo;s no magic here&ndash;everything is documented in the manual pages linked.</p><p>Translating the plan above into a finite-state machine, our <a href=https://man.openbsd.org/ifstated.conf.5>ifstated.conf(5)</a>
+(stored in <code>/etc/ifstated.conf</code>) looks like this:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell><span class=nv>uplink_bad</span> <span class=o>=</span> <span class=s1>&#39;!(&#34;ping -q -c 5 -w 1 8.8.8.8 | grep -q \&#34;, 0.0% packet loss\&#34;&#34; every 10 )&#39;</span>
+<span class=nv>standby_good</span> <span class=o>=</span> <span class=s1>&#39;(&#34;route -T1 exec ping -q -c 5 -w 1 8.8.8.8 | grep -q \&#34;, 0.0% packet loss\&#34;&#34; every 10)&#39;</span>
+
+init-state wired
+
+state wired <span class=o>{</span>
+    init <span class=o>{</span>
+        run <span class=s2>&#34;logger -t ifstated switching to wired&#34;</span>
+        run <span class=s2>&#34;ifconfig urtwn0 rdomain 1 inet autoconf up &amp;&amp; ifconfig em0 -rdomain &amp;&amp; sh /etc/netstart em0&#34;</span>
+    <span class=o>}</span>   
+    <span class=k>if</span> <span class=nv>$uplink_bad</span> <span class=o>{</span>
+        set-state wireless
+    <span class=o>}</span>   
+<span class=o>}</span>
+
+state wired_failed <span class=o>{</span>
+    init <span class=o>{</span>
+        run <span class=s2>&#34;logger -t ifstated switching to wired_failed&#34;</span>
+    <span class=o>}</span>
+    <span class=k>if</span> !<span class=nv>$uplink_bad</span> <span class=o>{</span>
+        set-state wired
+    <span class=o>}</span>
+    <span class=k>if</span> <span class=nv>$standby_good</span> <span class=o>{</span>
+        set-state wireless
+    <span class=o>}</span>
+<span class=o>}</span>
+
+state wireless <span class=o>{</span>
+    init <span class=o>{</span>
+        run <span class=s2>&#34;logger -t ifstated switching to wireless&#34;</span>
+        run <span class=s2>&#34;ifconfig em0 rdomain 1 inet autoconf up &amp;&amp; ifconfig urtwn0 -rdomain &amp;&amp; sh /etc/netstart urtwn0&#34;</span>
+    <span class=o>}</span>
+    <span class=k>if</span> <span class=nv>$uplink_bad</span> <span class=o>||</span> <span class=nv>$standby_good</span> <span class=o>{</span>
+        set-state wireless_failed
+    <span class=o>}</span>
+<span class=o>}</span>
+
+state wireless_failed <span class=o>{</span>
+    init <span class=o>{</span>
+        run <span class=s2>&#34;logger -t ifstated switching to wireless_failed&#34;</span>
+    <span class=o>}</span>
+    <span class=k>if</span> !<span class=nv>$uplink_bad</span> <span class=o>{</span>
+        set-state wireless
+    <span class=o>}</span>
+    <span class=k>if</span> <span class=nv>$standby_good</span> <span class=o>{</span>
+        set-state wired
+    <span class=o>}</span>
+<span class=o>}</span>
+</code></pre></div><p>Then check the config then enable:</p><div class=highlight><pre class=chroma><code class=language-shell data-lang=shell>$ doas ifstated -n
+configuration OK
+$ doas rcctl <span class=nb>enable</span> ifstated
+$ doas rcctl start ifstated
+</code></pre></div><p>How does it work? Simple: the primary interface (em0 if wired or urtwn0 if wireless) is checked regularly (<code>uplink_bad</code>)
+and if it fails, and the standby is fine (<code>standby_good</code>), then put em0 in routing domain 1, and urtwn0 in routing domain 0 (the default).
+Do the same in reverse for wireless failure.
+Good means: no packet loss from 5 pings to 8.8.8.8. This is easy to adjust.</p></div><footer class="post-footer clearfix"><p class=post-tags><span>Tagged:</span>
+<a href=/tags/openbsd/>openbsd</a>,
+<a href=/tags/backup/>backup</a></p></footer></article></div></div></div><footer class=footer><div class=container><div class=site-title-wrapper><h1 class=site-title><a title=ioctl.uk href=/>ioctl.uk</a></h1><a class="button-square button-jump-top js-jump-top" href=#><i class="fa fa-angle-up"></i></a></div><p class=footer-copyright><span>&copy; 2018-2022 root(at)host</span></p></div></footer><script src=/js/jquery-1.11.3.min.js></script><script src=/js/jquery.fitvids.js></script><script src=/js/scripts.js></script></body><script data-goatcounter=https://ioctl_uk.goatcounter.com/count async src=//gc.zgo.at/count.js></script></html>
